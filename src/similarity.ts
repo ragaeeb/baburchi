@@ -233,7 +233,13 @@ export const alignTokenSequences = (
             const leftScore = scoringMatrix[i][j - 1].score + ALIGNMENT_SCORES.GAP_PENALTY;
 
             const bestScore = Math.max(diagonalScore, upScore, leftScore);
-            const bestDirection = bestScore === diagonalScore ? 'diagonal' : bestScore === upScore ? 'up' : 'left';
+            let bestDirection: 'diagonal' | 'left' | 'up' = 'left';
+
+            if (bestScore === diagonalScore) {
+                bestDirection = 'diagonal';
+            } else if (bestScore === upScore) {
+                bestDirection = 'up';
+            }
 
             scoringMatrix[i][j] = { direction: bestDirection, score: bestScore };
         }

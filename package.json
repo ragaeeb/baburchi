@@ -7,7 +7,7 @@
         "url": "https://github.com/ragaeeb/baburchi.git"
     },
     "main": "dist/index.js",
-    "module": "src/index.ts",
+    "module": "dist/index.ts",
     "devDependencies": {
         "@eslint/js": "^9.29.0",
         "@types/bun": "^1.2.16",

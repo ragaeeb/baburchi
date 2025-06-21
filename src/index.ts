@@ -15,48 +15,48 @@ import {
  * and similarity scores to determine which token(s) to keep.
  *
  * @param originalToken - Token from the original OCR text (may be null)
- * @param suryaToken - Token from the Surya OCR text (may be null)
+ * @param altToken - Token from the alternative OCR text (may be null)
  * @param options - Configuration options including typo symbols and similarity threshold
  * @returns Array of selected tokens (usually contains one token, but may contain multiple)
  */
 const selectBestTokens = (
     originalToken: null | string,
-    suryaToken: null | string,
+    altToken: null | string,
     { similarityThreshold, typoSymbols }: FixTypoOptions,
 ): string[] => {
     // Handle missing tokens
     if (originalToken === null) {
-        return [suryaToken!];
+        return [altToken!];
     }
-    if (suryaToken === null) {
+    if (altToken === null) {
         return [originalToken];
     }
 
     // Preserve original if same after normalization (keeps diacritics)
-    if (normalizeArabicText(originalToken) === normalizeArabicText(suryaToken)) {
+    if (normalizeArabicText(originalToken) === normalizeArabicText(altToken)) {
         return [originalToken];
     }
 
     // Handle embedded footnotes
-    const result = handleFootnoteSelection(originalToken, suryaToken);
+    const result = handleFootnoteSelection(originalToken, altToken);
     if (result) return result;
 
     // Handle standalone footnotes
-    const footnoteResult = handleStandaloneFootnotes(originalToken, suryaToken);
+    const footnoteResult = handleStandaloneFootnotes(originalToken, altToken);
     if (footnoteResult) return footnoteResult;
 
     // Handle typo symbols - prefer the symbol itself
-    if (typoSymbols.includes(originalToken) || typoSymbols.includes(suryaToken)) {
-        const typoSymbol = typoSymbols.find((symbol) => symbol === originalToken || symbol === suryaToken);
+    if (typoSymbols.includes(originalToken) || typoSymbols.includes(altToken)) {
+        const typoSymbol = typoSymbols.find((symbol) => symbol === originalToken || symbol === altToken);
         return typoSymbol ? [typoSymbol] : [originalToken];
     }
 
     // Choose based on similarity
     const normalizedOriginal = normalizeArabicText(originalToken);
-    const normalizedSurya = normalizeArabicText(suryaToken);
-    const similarity = calculateSimilarity(normalizedOriginal, normalizedSurya);
+    const normalizedAlt = normalizeArabicText(altToken);
+    const similarity = calculateSimilarity(normalizedOriginal, normalizedAlt);
 
-    return [similarity > similarityThreshold ? originalToken : suryaToken];
+    return [similarity > similarityThreshold ? originalToken : altToken];
 };
 
 /**
@@ -104,29 +104,29 @@ const removeDuplicateTokens = (tokens: string[], highSimilarityThreshold: number
 };
 
 /**
- * Processes text alignment between original and Surya OCR results to fix typos.
+ * Processes text alignment between original and alternate OCR results to fix typos.
  * Uses the Needleman-Wunsch sequence alignment algorithm to align tokens,
  * then selects the best tokens and performs post-processing.
  *
  * @param originalText - Original OCR text that may contain typos
- * @param suryaText - Reference text from Surya OCR for comparison
+ * @param altText - Reference text from alternate OCR for comparison
  * @param options - Configuration options for alignment and selection
  * @returns Corrected text with typos fixed
  */
-export const processTextAlignment = (originalText: string, suryaText: string, options: FixTypoOptions): string => {
+export const processTextAlignment = (originalText: string, altText: string, options: FixTypoOptions): string => {
     const originalTokens = tokenizeText(originalText, options.typoSymbols);
-    const suryaTokens = tokenizeText(suryaText, options.typoSymbols);
+    const altTokens = tokenizeText(altText, options.typoSymbols);
 
     // Align token sequences
     const alignedPairs = alignTokenSequences(
         originalTokens,
-        suryaTokens,
+        altTokens,
         options.typoSymbols,
         options.similarityThreshold,
     );
 
     // Select best tokens from each aligned pair
-    const mergedTokens = alignedPairs.flatMap(([original, surya]) => selectBestTokens(original, surya, options));
+    const mergedTokens = alignedPairs.flatMap(([original, alt]) => selectBestTokens(original, alt, options));
 
     // Remove duplicates and handle post-processing
     const finalTokens = removeDuplicateTokens(mergedTokens, options.highSimilarityThreshold);

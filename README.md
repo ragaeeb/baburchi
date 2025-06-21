@@ -75,14 +75,14 @@ The main function for correcting typos using text alignment.
 
 **Returns:** Corrected text string
 
-### `processTextAlignment(originalText, suryaText, options)`
+### `processTextAlignment(originalText, altText, options)`
 
 Low-level function for advanced text processing with full configuration control.
 
 **Parameters:**
 
 - `originalText` (string): Original text to process
-- `suryaText` (string): Reference text for alignment
+- `altText` (string): Reference text for alignment
 - `options` (FixTypoOptions): Complete configuration object
 
 ## Usage Examples
@@ -222,7 +222,7 @@ const tokens = tokenizeText('محمد ﷺ رسول', ['ﷺ']); // ['محمد', '
 
 ## Contributing
 
-Contributions are welcome! Please ensure your contributions adhere to the coding standards and include relevant tests.
+Contributions are welcome. Please ensure your contributions adhere to the coding standards and include relevant tests.
 
 ### Development Setup
 
@@ -253,7 +253,7 @@ See [CHANGELOG.md](./CHANGELOG.md) for release history.
 
 ## Author
 
-**Ragaeeb Haq**
+Ragaeeb Haq
 
 - GitHub: [@ragaeeb](https://github.com/ragaeeb)
 

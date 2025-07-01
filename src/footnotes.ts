@@ -197,7 +197,7 @@ const needsCorrection = (lines: TextLine[], references: ReturnType<typeof extrac
  * const corrected = correctReferences(lines);
  * // Returns lines with "()" replaced by proper Arabic numerals like "(١)"
  */
-export const correctReferences = (lines: TextLine[]): TextLine[] => {
+export const correctReferences = <T extends TextLine>(lines: T[]): T[] => {
     const initialReferences = extractReferences(lines);
 
     if (!needsCorrection(lines, initialReferences)) {

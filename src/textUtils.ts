@@ -1,10 +1,15 @@
 export const PATTERNS = {
     arabicDigits: /[0-9\u0660-\u0669]+/,
+    arabicFootnoteReferenceRegex: /^\([\u0660-\u0669]+\)/g,
     arabicLettersAndDigits: /[0-9\u0621-\u063A\u0641-\u064A\u0660-\u0669]+/g,
     arabicPunctuationAndWhitespace: /[\s\u060C\u061B\u061F\u06D4]+/,
+    arabicReferenceRegex: /\([\u0660-\u0669]+\)/g,
     diacritics: /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g,
     footnoteEmbedded: /\([0-9\u0660-\u0669]+\)/,
     footnoteStandalone: /^\(?[0-9\u0660-\u0669]+\)?[،.]?$/,
+    invalidReferenceRegex: /\(\)|[.1OV9]\)/g, // Combined pattern for detecting any invalid/problematic references
+    ocrConfusedFootnoteReferenceRegex: /^\([.1OV9]+\)/g,
+    ocrConfusedReferenceRegex: /\([.1OV9]+\)/g, // OCR-confused characters that look like Arabic digits
     tatweel: /\u0640/g,
     whitespace: /\s+/,
 };

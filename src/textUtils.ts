@@ -1,11 +1,44 @@
+/**
+ * Collection of regex patterns used throughout the library for text processing
+ */
 export const PATTERNS = {
+    /** Matches Arabic-Indic digits (٠-٩) and Western digits (0-9) */
     arabicDigits: /[0-9\u0660-\u0669]+/,
+
+    /** Matches footnote references at the start of a line with Arabic-Indic digits: ^\([\u0660-\u0669]+\) */
+    arabicFootnoteReferenceRegex: /^\([\u0660-\u0669]+\)/g,
+
+    /** Matches Arabic letters and digits (both Western 0-9 and Arabic-Indic ٠-٩) */
     arabicLettersAndDigits: /[0-9\u0621-\u063A\u0641-\u064A\u0660-\u0669]+/g,
+
+    /** Matches Arabic punctuation marks and whitespace characters */
     arabicPunctuationAndWhitespace: /[\s\u060C\u061B\u061F\u06D4]+/,
+
+    /** Matches footnote references with Arabic-Indic digits in parentheses: \([\u0660-\u0669]+\) */
+    arabicReferenceRegex: /\([\u0660-\u0669]+\)/g,
+
+    /** Matches Arabic diacritical marks (harakat, tanween, etc.) */
     diacritics: /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g,
+
+    /** Matches embedded footnotes within text: \([0-9\u0660-\u0669]+\) */
     footnoteEmbedded: /\([0-9\u0660-\u0669]+\)/,
+
+    /** Matches standalone footnote markers at line start/end: ^\(?[0-9\u0660-\u0669]+\)?[،.]?$ */
     footnoteStandalone: /^\(?[0-9\u0660-\u0669]+\)?[،.]?$/,
+
+    /** Matches invalid/problematic footnote references: empty "()" or OCR-confused endings */
+    invalidReferenceRegex: /\(\)|\([.1OV9]+\)/g, // Combined pattern for detecting any invalid/problematic references
+
+    /** Matches OCR-confused footnote references at line start with characters like .1OV9 */
+    ocrConfusedFootnoteReferenceRegex: /^\([.1OV9]+\)/g,
+
+    /** Matches OCR-confused footnote references with characters commonly misread as Arabic digits */
+    ocrConfusedReferenceRegex: /\([.1OV9]+\)/g,
+
+    /** Matches Arabic tatweel (kashida) character used for text stretching */
     tatweel: /\u0640/g,
+
+    /** Matches one or more whitespace characters */
     whitespace: /\s+/,
 };
 

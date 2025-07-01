@@ -208,7 +208,14 @@ const options: FixTypoOptions = {
 The library also exports utility functions for advanced use cases:
 
 ```typescript
-import { calculateSimilarity, normalizeArabicText, tokenizeText, alignTokenSequences } from 'baburchi';
+import {
+    calculateSimilarity,
+    normalizeArabicText,
+    tokenizeText,
+    alignTokenSequences,
+    hasInvalidFootnotes,
+    correctReferences,
+} from 'baburchi';
 
 // Calculate similarity between two strings
 const similarity = calculateSimilarity('hello', 'helo'); // 0.8
@@ -218,6 +225,52 @@ const normalized = normalizeArabicText('اَلسَّلَامُ'); // 'السلا
 
 // Tokenize with symbol preservation
 const tokens = tokenizeText('محمد ﷺ رسول', ['ﷺ']); // ['محمد', 'ﷺ', 'رسول']
+
+// Check for invalid footnote references
+const hasInvalid = hasInvalidFootnotes('Text with ()'); // true
+
+// Correct footnote references in text lines
+const lines = [
+    { text: 'Main text with ()', isFootnote: false },
+    { text: '() This is a footnote', isFootnote: true },
+];
+const corrected = correctReferences(lines);
+```
+
+### Footnote Processing
+
+Baburchi provides specialized functions for handling footnote references:
+
+#### `hasInvalidFootnotes(text)`
+
+Detects invalid footnote patterns including empty parentheses "()" and OCR-confused characters.
+
+```typescript
+import { hasInvalidFootnotes } from 'baburchi';
+
+const invalid = hasInvalidFootnotes('Text with () reference'); // true
+const valid = hasInvalidFootnotes('Text with (١) reference'); // false
+```
+
+#### `correctReferences(lines)`
+
+Corrects footnote references across multiple text lines by:
+
+- Converting OCR-confused characters to proper Arabic numerals
+- Filling empty "()" references with appropriate numbers
+- Ensuring body text and footnote references match
+- Generating new reference numbers when needed
+
+```typescript
+import { correctReferences } from 'baburchi';
+
+const textLines = [
+    { text: 'Main content with (O) reference', isFootnote: false },
+    { text: '(1) Footnote text here', isFootnote: true },
+];
+
+const corrected = correctReferences(textLines);
+// OCR characters (O) and (1) become proper Arabic numerals
 ```
 
 ## Contributing

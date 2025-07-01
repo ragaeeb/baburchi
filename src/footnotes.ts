@@ -2,7 +2,18 @@ import { PATTERNS } from './textUtils';
 
 const INVALID_FOOTNOTE = '()';
 
-// Reusable function to detect if text has invalid footnotes
+/**
+ * Checks if the given text contains invalid footnote references.
+ * Invalid footnotes include empty parentheses "()" or OCR-confused characters
+ * like ".1OV9" that were misrecognized instead of Arabic numerals.
+ *
+ * @param text - Text to check for invalid footnote patterns
+ * @returns True if text contains invalid footnote references, false otherwise
+ * @example
+ * hasInvalidFootnotes('This text has ()') // Returns true
+ * hasInvalidFootnotes('This text has (١)') // Returns false
+ * hasInvalidFootnotes('OCR mistake (O)') // Returns true
+ */
 export const hasInvalidFootnotes = (text: string): boolean => {
     return PATTERNS.invalidReferenceRegex.test(text);
 };
@@ -10,24 +21,55 @@ export const hasInvalidFootnotes = (text: string): boolean => {
 // Arabic number formatter instance
 const arabicFormatter = new Intl.NumberFormat('ar-SA');
 
-// Helper function to convert numbers to Arabic numerals using Intl
+/**
+ * Converts a number to Arabic-Indic numerals using the Intl.NumberFormat API.
+ * Uses the 'ar-SA' locale to ensure proper Arabic numeral formatting.
+ *
+ * @param num - The number to convert to Arabic numerals
+ * @returns String representation using Arabic-Indic digits (٠-٩)
+ * @example
+ * numberToArabic(123) // Returns '١٢٣'
+ * numberToArabic(5) // Returns '٥'
+ */
 const numberToArabic = (num: number): string => {
     return arabicFormatter.format(num);
 };
 
-// Helper function to convert OCR-confused characters to Arabic numerals
+/**
+ * Converts OCR-confused characters to their corresponding Arabic-Indic numerals.
+ * Handles common OCR misrecognitions where Latin characters are mistaken for Arabic digits.
+ *
+ * @param char - Single character that may be an OCR mistake
+ * @returns Corresponding Arabic-Indic numeral or original character if no mapping exists
+ * @example
+ * ocrToArabic('O') // Returns '٥' (O often confused with ٥)
+ * ocrToArabic('1') // Returns '١' (1 often confused with ١)
+ * ocrToArabic('.') // Returns '٠' (dot often confused with ٠)
+ */
 const ocrToArabic = (char: string): string => {
     const ocrToArabicMap: { [key: string]: string } = {
         '1': '١',
         '9': '٩',
         '.': '٠',
         O: '٥',
+        o: '٥',
         V: '٧',
+        v: '٧',
     };
     return ocrToArabicMap[char] || char;
 };
 
-// Helper function to parse Arabic numerals from a reference string like '(١٢)'
+/**
+ * Parses Arabic-Indic numerals from a reference string and converts to a JavaScript number.
+ * Removes parentheses and converts each Arabic-Indic digit to its Western equivalent.
+ *
+ * @param arabicStr - String containing Arabic-Indic numerals, typically in format '(١٢٣)'
+ * @returns Parsed number, or 0 if parsing fails
+ * @example
+ * arabicToNumber('(١٢٣)') // Returns 123
+ * arabicToNumber('(٥)') // Returns 5
+ * arabicToNumber('invalid') // Returns 0
+ */
 const arabicToNumber = (arabicStr: string): number => {
     const lookup: { [key: string]: string } = {
         '٠': '0',
@@ -55,7 +97,24 @@ type TextLine = {
     text: string;
 };
 
-// Extract all references from lines
+/**
+ * Extracts all footnote references from text lines, categorizing them by type and location.
+ * Handles both Arabic-Indic numerals and OCR-confused characters in body text and footnotes.
+ *
+ * @param lines - Array of text line objects with optional isFootnote flag
+ * @returns Object containing categorized reference arrays:
+ *   - bodyReferences: All valid references found in body text
+ *   - footnoteReferences: All valid references found in footnotes
+ *   - ocrConfusedInBody: OCR-confused references in body text (for tracking)
+ *   - ocrConfusedInFootnotes: OCR-confused references in footnotes (for tracking)
+ * @example
+ * const lines = [
+ *   { text: 'Body with (١) and (O)', isFootnote: false },
+ *   { text: '(١) Footnote text', isFootnote: true }
+ * ];
+ * const refs = extractReferences(lines);
+ * // refs.bodyReferences contains ['(١)', '(٥)'] - OCR 'O' converted to '٥'
+ */
 const extractReferences = (lines: TextLine[]) => {
     const arabicReferencesInBody = lines
         .filter((b) => !b.isFootnote)
@@ -89,7 +148,20 @@ const extractReferences = (lines: TextLine[]) => {
     };
 };
 
-// Check if corrections are needed
+/**
+ * Determines if footnote reference correction is needed by checking for:
+ * 1. Invalid footnote patterns (empty parentheses, OCR mistakes)
+ * 2. Mismatched sets of references between body text and footnotes
+ * 3. Different counts of references in body vs footnotes
+ *
+ * @param lines - Array of text line objects to analyze
+ * @param references - Extracted reference data from extractReferences()
+ * @returns True if correction is needed, false if references are already correct
+ * @example
+ * const lines = [{ text: 'Text with ()', isFootnote: false }];
+ * const refs = extractReferences(lines);
+ * needsCorrection(lines, refs) // Returns true due to invalid "()" reference
+ */
 const needsCorrection = (lines: TextLine[], references: ReturnType<typeof extractReferences>) => {
     const mistakenReferences = lines.some((line) => hasInvalidFootnotes(line.text));
     if (mistakenReferences) return true;
@@ -108,6 +180,23 @@ const needsCorrection = (lines: TextLine[], references: ReturnType<typeof extrac
     return false;
 };
 
+/**
+ * Corrects footnote references in an array of text lines by:
+ * 1. Converting OCR-confused characters to proper Arabic numerals
+ * 2. Filling in empty "()" references with appropriate numbers
+ * 3. Ensuring footnote references in body text match those in footnotes
+ * 4. Generating new reference numbers when needed
+ *
+ * @param lines - Array of text line objects, each with optional isFootnote flag
+ * @returns Array of corrected text lines with proper footnote references
+ * @example
+ * const lines = [
+ *   { text: 'Main text with ()', isFootnote: false },
+ *   { text: '() This is a footnote', isFootnote: true }
+ * ];
+ * const corrected = correctReferences(lines);
+ * // Returns lines with "()" replaced by proper Arabic numerals like "(١)"
+ */
 export const correctReferences = (lines: TextLine[]): TextLine[] => {
     const initialReferences = extractReferences(lines);
 

@@ -273,6 +273,140 @@ const corrected = correctReferences(textLines);
 // OCR characters (O) and (1) become proper Arabic numerals
 ```
 
+## Text Balance Validation
+
+Baburchi includes robust text balance validation utilities for checking proper pairing of quotes and brackets in text. These functions help identify syntax errors, unclosed brackets, mismatched pairs, and other balance issues commonly found in OCR-processed text.
+
+### Balance Checking Functions
+
+#### `checkBalance(text)`
+
+Comprehensive balance checking for both quotes and brackets in a single function.
+
+```typescript
+import { checkBalance } from 'baburchi';
+
+const result = checkBalance('Hello "world" and (test)');
+console.log(result.isBalanced); // true
+console.log(result.errors); // []
+
+const problematic = checkBalance('Hello "world and (test');
+console.log(problematic.isBalanced); // false
+console.log(problematic.errors);
+// [
+//   { char: '"', index: 6, reason: 'unmatched', type: 'quote' },
+//   { char: '(', index: 17, reason: 'unclosed', type: 'bracket' }
+// ]
+```
+
+#### `getUnbalancedErrors(text)`
+
+Advanced error detection for multi-line text with absolute character positioning.
+
+```typescript
+import { getUnbalancedErrors } from 'baburchi';
+
+const multiLineText = `First line with "unmatched quote
+Second line with (unclosed bracket
+Third line is balanced "properly"`;
+
+const errors = getUnbalancedErrors(multiLineText);
+console.log(errors);
+// [
+//   { absoluteIndex: 16, char: '"', reason: 'unmatched', type: 'quote' },
+//   { absoluteIndex: 51, char: '(', reason: 'unclosed', type: 'bracket' }
+// ]
+```
+
+### Supported Bracket Types
+
+Baburchi supports the following bracket pairs:
+
+- **Parentheses**: `()`
+- **Square brackets**: `[]`
+- **Curly brackets**: `{}`
+- **Angle brackets**: `«»`
+
+### Error Types
+
+The balance checker identifies three types of errors:
+
+- **`unmatched`**: Opening or closing character without a corresponding pair
+- **`unclosed`**: Opening character that was never closed
+- **`mismatched`**: Wrong closing character for an opening character (e.g., `(]`)
+
+### Balance Checking Configuration
+
+```typescript
+import { BRACKETS, OPEN_BRACKETS, CLOSE_BRACKETS } from 'baburchi';
+
+// Access bracket mappings
+console.log(BRACKETS); // { '«': '»', '(': ')', '[': ']', '{': '}' }
+
+// Check if character is an opening bracket
+console.log(OPEN_BRACKETS.has('(')); // true
+
+// Check if character is a closing bracket
+console.log(CLOSE_BRACKETS.has(')')); // true
+```
+
+### Use Cases
+
+#### Text Editor Integration
+
+Perfect for syntax highlighting and error detection in text editors:
+
+```typescript
+import { getUnbalancedErrors } from 'baburchi';
+
+const editorContent = getUserInput();
+const errors = getUnbalancedErrors(editorContent);
+
+// Highlight errors in the editor using absolute positions
+errors.forEach((error) => {
+    highlightError(error.absoluteIndex, error.char, error.reason);
+});
+```
+
+#### OCR Post-Processing
+
+Identify and flag potential OCR errors in processed text:
+
+```typescript
+import { checkBalance } from 'baburchi';
+
+const ocrText = processOCRDocument();
+const { isBalanced, errors } = checkBalance(ocrText);
+
+if (!isBalanced) {
+    console.log(`Found ${errors.length} balance errors requiring review`);
+    errors.forEach((error) => {
+        console.log(`${error.type} error: "${error.char}" at position ${error.index} (${error.reason})`);
+    });
+}
+```
+
+#### Document Validation
+
+Validate document structure before processing:
+
+```typescript
+import { getUnbalancedErrors } from 'baburchi';
+
+const document = loadDocument();
+const lines = document.split('\n');
+
+// Only check lines longer than 10 characters (as per library behavior)
+const longLines = lines.filter((line) => line.length > 10);
+const errors = getUnbalancedErrors(document);
+
+if (errors.length === 0) {
+    console.log('Document structure is valid');
+} else {
+    console.log(`Document has ${errors.length} structural issues`);
+}
+```
+
 ## Contributing
 
 Contributions are welcome. Please ensure your contributions adhere to the coding standards and include relevant tests.

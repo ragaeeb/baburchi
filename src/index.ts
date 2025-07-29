@@ -148,5 +148,6 @@ export const fixTypo = (
 
 export * from './balance';
 export * from './footnotes';
+export * from './noise';
 export * from './similarity';
 export * from './textUtils';

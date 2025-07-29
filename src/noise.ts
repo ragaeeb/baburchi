@@ -1,22 +1,41 @@
 import { PATTERNS } from './textUtils';
 
 /**
- * Analyzes character statistics for the text
+ * Character statistics for analyzing text content and patterns
  */
 type CharacterStats = {
+    /** Number of Arabic script characters in the text */
     arabicCount: number;
+    /** Map of character frequencies for repetition analysis */
     charFreq: Map<string, number>;
+    /** Number of digit characters (0-9) in the text */
     digitCount: number;
+    /** Number of Latin alphabet characters (a-z, A-Z) in the text */
     latinCount: number;
+    /** Number of punctuation characters in the text */
     punctuationCount: number;
+    /** Number of whitespace characters in the text */
     spaceCount: number;
+    /** Number of symbol characters (non-alphanumeric, non-punctuation) in the text */
     symbolCount: number;
 };
 
 /**
- * Determines if a given Arabic text string is likely to be noise
- * @param text - The input string to analyze
- * @returns true if the text is likely noise, false if it appears to be valid Arabic content
+ * Determines if a given Arabic text string is likely to be noise or unwanted OCR artifacts.
+ * This function performs comprehensive analysis to identify patterns commonly associated
+ * with OCR errors, formatting artifacts, or meaningless content in Arabic text processing.
+ *
+ * @param text - The input string to analyze for noise patterns
+ * @returns true if the text is likely noise or unwanted content, false if it appears to be valid Arabic content
+ *
+ * @example
+ * ```typescript
+ * import { isArabicTextNoise } from 'baburchi';
+ *
+ * console.log(isArabicTextNoise('---')); // true (formatting artifact)
+ * console.log(isArabicTextNoise('السلام عليكم')); // false (valid Arabic)
+ * console.log(isArabicTextNoise('ABC')); // true (uppercase pattern)
+ * ```
  */
 export const isArabicTextNoise = (text: string): boolean => {
     // Early return for empty or very short strings
@@ -61,6 +80,24 @@ export const isArabicTextNoise = (text: string): boolean => {
     return isNonArabicNoise(charStats, length, trimmed);
 };
 
+/**
+ * Analyzes character composition and frequency statistics for the input text.
+ * Categorizes characters by type (Arabic, Latin, digits, spaces, punctuation, symbols)
+ * and tracks character frequency for pattern analysis.
+ *
+ * @param text - The text string to analyze
+ * @returns CharacterStats object containing detailed character analysis
+ *
+ * @example
+ * ```typescript
+ * import { analyzeCharacterStats } from 'baburchi';
+ *
+ * const stats = analyzeCharacterStats('مرحبا 123!');
+ * console.log(stats.arabicCount); // 5
+ * console.log(stats.digitCount); // 3
+ * console.log(stats.symbolCount); // 1
+ * ```
+ */
 export function analyzeCharacterStats(text: string): CharacterStats {
     const arabicRange = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
     const stats: CharacterStats = {
@@ -98,7 +135,24 @@ export function analyzeCharacterStats(text: string): CharacterStats {
 }
 
 /**
- * Checks if text has excessive character repetition
+ * Detects excessive repetition of specific characters that commonly indicate noise.
+ * Focuses on repetitive characters like exclamation marks, dots, dashes, equals signs,
+ * and underscores that often appear in OCR artifacts or formatting elements.
+ *
+ * @param charStats - Character statistics from analyzeCharacterStats
+ * @param textLength - Total length of the original text
+ * @returns true if excessive repetition is detected, false otherwise
+ *
+ * @example
+ * ```typescript
+ * import { hasExcessiveRepetition, analyzeCharacterStats } from 'baburchi';
+ *
+ * const stats = analyzeCharacterStats('!!!!!');
+ * console.log(hasExcessiveRepetition(stats, 5)); // true
+ *
+ * const normalStats = analyzeCharacterStats('hello world');
+ * console.log(hasExcessiveRepetition(normalStats, 11)); // false
+ * ```
  */
 export function hasExcessiveRepetition(charStats: CharacterStats, textLength: number): boolean {
     let repeatCount = 0;
@@ -115,7 +169,23 @@ export function hasExcessiveRepetition(charStats: CharacterStats, textLength: nu
 }
 
 /**
- * Checks if text matches basic noise patterns
+ * Identifies text that matches common noise patterns using regular expressions.
+ * Detects patterns like repeated dashes, dot sequences, uppercase-only text,
+ * digit-dash combinations, and other formatting artifacts commonly found in OCR output.
+ *
+ * @param text - The text string to check against noise patterns
+ * @returns true if the text matches a basic noise pattern, false otherwise
+ *
+ * @example
+ * ```typescript
+ * import { isBasicNoisePattern } from 'baburchi';
+ *
+ * console.log(isBasicNoisePattern('---')); // true
+ * console.log(isBasicNoisePattern('...')); // true
+ * console.log(isBasicNoisePattern('ABC')); // true
+ * console.log(isBasicNoisePattern('- 77')); // true
+ * console.log(isBasicNoisePattern('hello world')); // false
+ * ```
  */
 export function isBasicNoisePattern(text: string): boolean {
     const noisePatterns = [
@@ -134,7 +204,25 @@ export function isBasicNoisePattern(text: string): boolean {
 }
 
 /**
- * Determines if non-Arabic content is noise
+ * Determines if non-Arabic content should be classified as noise based on various heuristics.
+ * Analyzes symbol-to-content ratios, text length, spacing patterns, and content composition
+ * to identify unwanted OCR artifacts or meaningless content.
+ *
+ * @param charStats - Character statistics from analyzeCharacterStats
+ * @param textLength - Total length of the original text
+ * @param text - The original text string for additional pattern matching
+ * @returns true if the content is likely noise, false if it appears to be valid content
+ *
+ * @example
+ * ```typescript
+ * import { isNonArabicNoise, analyzeCharacterStats } from 'baburchi';
+ *
+ * const stats = analyzeCharacterStats('!!!');
+ * console.log(isNonArabicNoise(stats, 3, '!!!')); // true
+ *
+ * const validStats = analyzeCharacterStats('2023');
+ * console.log(isNonArabicNoise(validStats, 4, '2023')); // false
+ * ```
  */
 export function isNonArabicNoise(charStats: CharacterStats, textLength: number, text: string): boolean {
     const contentChars = charStats.arabicCount + charStats.latinCount + charStats.digitCount;
@@ -171,7 +259,27 @@ export function isNonArabicNoise(charStats: CharacterStats, textLength: number, 
 }
 
 /**
- * Checks for spacing patterns that indicate noise
+ * Detects problematic spacing patterns that indicate noise or OCR artifacts.
+ * Identifies cases where spacing is excessive relative to content, or where
+ * single characters are surrounded by spaces in a way that suggests OCR errors.
+ *
+ * @param charStats - Character statistics from analyzeCharacterStats
+ * @param contentChars - Number of meaningful content characters (Arabic + Latin + digits)
+ * @param textLength - Total length of the original text
+ * @returns true if spacing patterns indicate noise, false otherwise
+ *
+ * @example
+ * ```typescript
+ * import { isSpacingNoise, analyzeCharacterStats } from 'baburchi';
+ *
+ * const stats = analyzeCharacterStats(' a ');
+ * const contentChars = stats.arabicCount + stats.latinCount + stats.digitCount;
+ * console.log(isSpacingNoise(stats, contentChars, 3)); // true
+ *
+ * const normalStats = analyzeCharacterStats('hello world');
+ * const normalContent = normalStats.arabicCount + normalStats.latinCount + normalStats.digitCount;
+ * console.log(isSpacingNoise(normalStats, normalContent, 11)); // false
+ * ```
  */
 export function isSpacingNoise(charStats: CharacterStats, contentChars: number, textLength: number): boolean {
     const { arabicCount, spaceCount } = charStats;
@@ -195,7 +303,27 @@ export function isSpacingNoise(charStats: CharacterStats, contentChars: number, 
 }
 
 /**
- * Validates Arabic content based on character statistics
+ * Validates whether Arabic content is substantial enough to be considered meaningful.
+ * Uses character counts and text length to determine if Arabic text contains
+ * sufficient content or if it's likely to be a fragment or OCR artifact.
+ *
+ * @param charStats - Character statistics from analyzeCharacterStats
+ * @param textLength - Total length of the original text
+ * @returns true if the Arabic content appears valid, false if it's likely noise
+ *
+ * @example
+ * ```typescript
+ * import { isValidArabicContent, analyzeCharacterStats } from 'baburchi';
+ *
+ * const validStats = analyzeCharacterStats('السلام عليكم');
+ * console.log(isValidArabicContent(validStats, 12)); // true
+ *
+ * const shortStats = analyzeCharacterStats('ص');
+ * console.log(isValidArabicContent(shortStats, 1)); // false
+ *
+ * const withDigitsStats = analyzeCharacterStats('ص 5');
+ * console.log(isValidArabicContent(withDigitsStats, 3)); // true
+ * ```
  */
 export function isValidArabicContent(charStats: CharacterStats, textLength: number): boolean {
     // Arabic text with reasonable content length is likely valid

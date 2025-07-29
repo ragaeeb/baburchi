@@ -12,12 +12,13 @@
 ![GitHub issues](https://img.shields.io/github/issues/ragaeeb/baburchi)
 ![GitHub stars](https://img.shields.io/github/stars/ragaeeb/baburchi?style=social)
 
-A lightweight TypeScript library for intelligent OCR text post-processing, specializing in Arabic text with advanced typo correction using sequence alignment algorithms.
+A lightweight TypeScript library for intelligent OCR text post-processing, specializing in Arabic text with advanced typo correction using sequence alignment algorithms and comprehensive noise detection.
 
 ## Features
 
 - 🧠 **Intelligent Text Alignment**: Uses the Needleman-Wunsch algorithm for optimal text sequence alignment
 - 🔤 **Arabic Text Specialization**: Advanced normalization and diacritics handling for Arabic text
+- 🧹 **Noise Detection**: Comprehensive Arabic text noise detection and OCR artifact identification
 - 📝 **Footnote Management**: Smart handling of embedded and standalone footnotes
 - ⚡ **High Performance**: Space-optimized algorithms with O(min(m,n)) space complexity
 - 🎯 **Special Symbol Preservation**: Configurable preservation of religious symbols and honorifics
@@ -44,15 +45,19 @@ bun add baburchi
 ## Quick Start
 
 ```typescript
-import { fixTypo } from 'baburchi';
+import { fixTypo, isArabicTextNoise } from 'baburchi';
 
-// Basic usage with Arabic text
+// Basic typo correction with Arabic text
 const originalText = 'محمد صلى الله عليه وسلم رسول الله';
 const correctedText = 'محمد ﷺ رسول الله';
 const typoSymbols = ['ﷺ', '﷽', 'ﷻ'];
 
 const result = fixTypo(originalText, correctedText, { typoSymbols });
 console.log(result); // 'محمد صلى الله عليه ﷺ رسول الله'
+
+// Noise detection for OCR cleanup
+const cleanText = isArabicTextNoise('السلام عليكم'); // false
+const noiseText = isArabicTextNoise('---'); // true
 ```
 
 ## API Reference
@@ -235,6 +240,213 @@ const lines = [
     { text: '() This is a footnote', isFootnote: true },
 ];
 const corrected = correctReferences(lines);
+```
+
+## Noise Detection
+
+Baburchi provides comprehensive noise detection capabilities specifically designed for Arabic OCR post-processing. These functions help identify and filter out OCR artifacts, formatting elements, and meaningless content commonly found in digitized Arabic documents.
+
+### `isArabicTextNoise(text)`
+
+The main noise detection function that performs comprehensive analysis to identify unwanted OCR artifacts.
+
+```typescript
+import { isArabicTextNoise } from 'baburchi';
+
+// Detect formatting artifacts
+console.log(isArabicTextNoise('---')); // true
+console.log(isArabicTextNoise('...')); // true
+console.log(isArabicTextNoise('!!!')); // true
+
+// Detect OCR errors
+console.log(isArabicTextNoise('ABC')); // true (uppercase-only pattern)
+console.log(isArabicTextNoise('- 77')); // true (digit-dash combination)
+
+// Valid Arabic content
+console.log(isArabicTextNoise('السلام عليكم')); // false
+console.log(isArabicTextNoise('محمد ﷺ')); // false
+console.log(isArabicTextNoise('2023')); // false (substantial number)
+```
+
+### Character Analysis Functions
+
+#### `analyzeCharacterStats(text)`
+
+Analyzes character composition and frequency statistics for detailed text analysis.
+
+```typescript
+import { analyzeCharacterStats } from 'baburchi';
+
+const stats = analyzeCharacterStats('مرحبا 123!');
+console.log(stats);
+// {
+//   arabicCount: 5,
+//   digitCount: 3,
+//   latinCount: 0,
+//   spaceCount: 1,
+//   punctuationCount: 1,
+//   symbolCount: 0,
+//   charFreq: Map { 'م' => 1, 'ر' => 1, 'ح' => 1, ... }
+// }
+```
+
+#### `hasExcessiveRepetition(charStats, textLength)`
+
+Detects excessive character repetition that commonly indicates noise.
+
+```typescript
+import { hasExcessiveRepetition, analyzeCharacterStats } from 'baburchi';
+
+const stats = analyzeCharacterStats('!!!!!');
+console.log(hasExcessiveRepetition(stats, 5)); // true
+
+const normalStats = analyzeCharacterStats('hello world');
+console.log(hasExcessiveRepetition(normalStats, 11)); // false
+```
+
+### Pattern Detection Functions
+
+#### `isBasicNoisePattern(text)`
+
+Identifies text matching common noise patterns using regular expressions.
+
+```typescript
+import { isBasicNoisePattern } from 'baburchi';
+
+console.log(isBasicNoisePattern('---')); // true
+console.log(isBasicNoisePattern('...')); // true
+console.log(isBasicNoisePattern('ABC')); // true
+console.log(isBasicNoisePattern('- 77')); // true
+console.log(isBasicNoisePattern('hello world')); // false
+```
+
+#### `isSpacingNoise(charStats, contentChars, textLength)`
+
+Detects problematic spacing patterns that indicate OCR artifacts.
+
+```typescript
+import { isSpacingNoise, analyzeCharacterStats } from 'baburchi';
+
+const stats = analyzeCharacterStats(' a ');
+const contentChars = stats.arabicCount + stats.latinCount + stats.digitCount;
+console.log(isSpacingNoise(stats, contentChars, 3)); // true
+
+const normalStats = analyzeCharacterStats('hello world');
+const normalContent = normalStats.arabicCount + normalStats.latinCount + normalStats.digitCount;
+console.log(isSpacingNoise(normalStats, normalContent, 11)); // false
+```
+
+### Content Validation Functions
+
+#### `isValidArabicContent(charStats, textLength)`
+
+Validates whether Arabic content is substantial enough to be meaningful.
+
+```typescript
+import { isValidArabicContent, analyzeCharacterStats } from 'baburchi';
+
+const validStats = analyzeCharacterStats('السلام عليكم');
+console.log(isValidArabicContent(validStats, 12)); // true
+
+const shortStats = analyzeCharacterStats('ص');
+console.log(isValidArabicContent(shortStats, 1)); // false
+
+const withDigitsStats = analyzeCharacterStats('ص 5');
+console.log(isValidArabicContent(withDigitsStats, 3)); // true
+```
+
+#### `isNonArabicNoise(charStats, textLength, text)`
+
+Determines if non-Arabic content should be classified as noise.
+
+```typescript
+import { isNonArabicNoise, analyzeCharacterStats } from 'baburchi';
+
+const stats = analyzeCharacterStats('!!!');
+console.log(isNonArabicNoise(stats, 3, '!!!')); // true
+
+const validStats = analyzeCharacterStats('2023');
+console.log(isNonArabicNoise(validStats, 4, '2023')); // false
+```
+
+### Noise Detection Use Cases
+
+#### OCR Post-Processing Pipeline
+
+```typescript
+import { isArabicTextNoise } from 'baburchi';
+
+const ocrLines = ['السلام عليكم ورحمة الله', '---', 'هذا النص صحيح', 'ABC', '...', 'محمد ﷺ رسول الله'];
+
+const cleanLines = ocrLines.filter((line) => !isArabicTextNoise(line));
+console.log(cleanLines);
+// ['السلام عليكم ورحمة الله', 'هذا النص صحيح', 'محمد ﷺ رسول الله']
+```
+
+#### Document Quality Assessment
+
+```typescript
+import { analyzeCharacterStats, isArabicTextNoise } from 'baburchi';
+
+function assessDocumentQuality(text: string) {
+    const lines = text.split('\n');
+    const stats = {
+        totalLines: lines.length,
+        validLines: 0,
+        noiseLines: 0,
+        noisyContent: [] as string[],
+    };
+
+    for (const line of lines) {
+        if (isArabicTextNoise(line.trim())) {
+            stats.noiseLines++;
+            stats.noisyContent.push(line);
+        } else {
+            stats.validLines++;
+        }
+    }
+
+    return {
+        ...stats,
+        qualityRatio: stats.validLines / stats.totalLines,
+        needsCleaning: stats.qualityRatio < 0.8,
+    };
+}
+
+const document = `السلام عليكم
+---
+هذا نص عربي صحيح
+ABC
+النهاية`;
+
+const quality = assessDocumentQuality(document);
+console.log(quality);
+// { totalLines: 5, validLines: 3, noiseLines: 2, qualityRatio: 0.6, needsCleaning: true }
+```
+
+#### Batch Text Cleaning
+
+```typescript
+import { isArabicTextNoise } from 'baburchi';
+
+function cleanTextBatch(texts: string[]): { clean: string[]; noise: string[] } {
+    const result = { clean: [] as string[], noise: [] as string[] };
+
+    for (const text of texts) {
+        if (isArabicTextNoise(text)) {
+            result.noise.push(text);
+        } else {
+            result.clean.push(text);
+        }
+    }
+
+    return result;
+}
+
+const mixedTexts = ['السلام عليكم', '---', 'مرحبا', '!!!', '2023'];
+const { clean, noise } = cleanTextBatch(mixedTexts);
+console.log('Clean:', clean); // ['السلام عليكم', 'مرحبا', '2023']
+console.log('Noise:', noise); // ['---', '!!!']
 ```
 
 ### Footnote Processing
@@ -446,4 +658,4 @@ Ragaeeb Haq
 
 ---
 
-Built with ❤️ using TypeScript and Bun. Optimized for Arabic text processing and OCR post-processing.
+Built with ❤️ using TypeScript and Bun. Optimized for Arabic text processing, OCR post-processing, and noise detection.

@@ -2,6 +2,9 @@
  * Collection of regex patterns used throughout the library for text processing
  */
 export const PATTERNS = {
+    /** Matches Arabic characters across all Unicode blocks */
+    arabicCharacters: /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/,
+
     /** Matches Arabic-Indic digits (٠-٩) and Western digits (0-9) */
     arabicDigits: /[0-9\u0660-\u0669]+/,
 

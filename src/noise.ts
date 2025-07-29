@@ -99,7 +99,6 @@ export const isArabicTextNoise = (text: string): boolean => {
  * ```
  */
 export function analyzeCharacterStats(text: string): CharacterStats {
-    const arabicRange = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
     const stats: CharacterStats = {
         arabicCount: 0,
         charFreq: new Map<string, number>(),
@@ -116,7 +115,7 @@ export function analyzeCharacterStats(text: string): CharacterStats {
         // Count character frequency for repetition detection
         stats.charFreq.set(char, (stats.charFreq.get(char) || 0) + 1);
 
-        if (arabicRange.test(char)) {
+        if (PATTERNS.arabicCharacters.test(char)) {
             stats.arabicCount++;
         } else if (/\d/.test(char)) {
             stats.digitCount++;

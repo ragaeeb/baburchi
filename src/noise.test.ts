@@ -109,9 +109,21 @@ describe('noise', () => {
                 expect(isArabicTextNoise('آية 5')).toBeFalse();
             });
 
-            it('should reject very short Arabic without context', () => {
-                expect(isArabicTextNoise('ص')).toBeTrue(); // Single character
-                expect(isArabicTextNoise('صص')).toBeTrue(); // Two characters, no context
+            it('should reject single letter Arabic context', () => {
+                expect(isArabicTextNoise('ص')).toBeTrue();
+            });
+
+            it('should accept Arabic-Indic numerals in parentheses', () => {
+                expect(isArabicTextNoise('(٦٠١٠).')).toBeFalse();
+                expect(isArabicTextNoise('(١٢٣٤)')).toBeFalse();
+                expect(isArabicTextNoise('[٥٦٧٨]')).toBeFalse();
+            });
+
+            it('should accept very short Arabic without context', () => {
+                expect(isArabicTextNoise('صص')).toBeFalse();
+                expect(isArabicTextNoise('له.')).toBeFalse();
+                expect(isArabicTextNoise('في:')).toBeFalse();
+                expect(isArabicTextNoise('من،')).toBeFalse();
             });
 
             it('should handle Arabic with Latin letters as noise', () => {
@@ -239,7 +251,7 @@ describe('noise', () => {
 
         it('should reject insufficient Arabic content', () => {
             const stats = analyzeCharacterStats('ص');
-            expect(isValidArabicContent(stats, 1)).toBeFalse();
+            expect(isValidArabicContent(stats, 1)).toBeTrue();
         });
 
         it('should reject short Arabic without digits when too long', () => {

@@ -208,6 +208,106 @@ const options: FixTypoOptions = {
 };
 ```
 
+## Text Segment Alignment
+
+Baburchi provides specialized functionality for aligning split text segments back to their target lines. This is particularly useful when OCR has fragmented continuous text or poetry into separate segments that need to be reconstructed.
+
+### `alignTextSegments(targetLines, segmentLines)`
+
+Aligns split text segments to match target lines by finding the best order and combining segments when necessary.
+
+**Parameters:**
+
+- `targetLines` (string[]): Array where each element is either a string to align against, or falsy to skip alignment
+- `segmentLines` (string[]): Array of text segments that may represent split versions of target lines
+
+**Returns:** Array of aligned text lines
+
+#### Poetry Reconstruction Example
+
+```typescript
+import { alignTextSegments } from 'baburchi';
+
+// Target lines from a poetry collection
+const targetLines = [
+    '', // Don't align - pass through as-is
+    'قد قُدِّم العَجْبُ على الرُّوَيس وشارف الوهدُ أبا قُبيسِ',
+    'وطاول البقلُ فروعَ الميْس وهبت العنز لقرع التيسِ',
+    'وادَّعت الروم أبًا في قيس واختلط الناس اختلاط الحيسِ',
+    'إذ قرا القاضي حليف الكيس معاني الشعر على العبيسي',
+    '', // Don't align - pass through as-is
+];
+
+// OCR segments (fragmented and possibly out of order)
+const segmentLines = [
+    'A', // Header/marker
+    'قد قُدِّم العَجْبُ على الرُّوَيس وشـارف الوهـدُ أبــا قُبيس',
+    'وطاول البقلُ فروعَ الميْس',
+    'وهبت العنـز لـقرع التـيس',
+    'واختلط الناس اختلاط الحيس',
+    'وادَّعت الروم أبًا في قيس',
+    'معـاني الشعر على العـبـيــسـي',
+    'إذ قرا القاضي حليف الكيس',
+    'B', // Footer/marker
+];
+
+const result = alignTextSegments(targetLines, segmentLines);
+console.log(result);
+// Output:
+// [
+//     'A',
+//     'قد قُدِّم العَجْبُ على الرُّوَيس وشـارف الوهـدُ أبــا قُبيس',
+//     'وطاول البقلُ فروعَ الميْس وهبت العنـز لـقرع التـيس',
+//     'وادَّعت الروم أبًا في قيس واختلط الناس اختلاط الحيس',
+//     'إذ قرا القاضي حليف الكيس معـاني الشعر على العـبـيــسـي',
+//     'B'
+// ]
+```
+
+#### Handling Reversed Segments
+
+```typescript
+import { alignTextSegments } from 'baburchi';
+
+// When OCR produces segments in wrong order
+const targetLines = ['hello world goodbye'];
+const segmentLines = ['goodbye', 'hello world'];
+
+const result = alignTextSegments(targetLines, segmentLines);
+console.log(result); // ['hello world goodbye']
+```
+
+#### Mixed Alignment Scenarios
+
+```typescript
+import { alignTextSegments } from 'baburchi';
+
+// Some lines need alignment, others are one-to-one
+const targetLines = ['', 'split line content', '']; // Empty strings = no alignment needed
+const segmentLines = ['header', 'split line', 'content', 'footer'];
+
+const result = alignTextSegments(targetLines, segmentLines);
+console.log(result); // ['header', 'split line content', 'footer']
+```
+
+### How It Works
+
+1. **Target Processing**: For each target line that requires alignment (non-falsy), the algorithm:
+    - Finds the best combination of available segments that matches the target
+    - Uses similarity scoring to determine optimal segment ordering
+    - Combines segments when they form a better match together
+
+2. **One-to-One Mapping**: For falsy target lines (empty strings, null, undefined), segments are passed through directly
+
+3. **Remaining Segments**: Any segments not consumed during alignment are appended to the result
+
+This function is particularly useful for:
+
+- Reconstructing fragmented poetry or prose
+- Aligning OCR segments with reference text
+- Handling cases where text layout affects line ordering
+- Processing documents where content has been split across multiple detection regions
+
 ## Utilities
 
 The library also exports utility functions for advanced use cases:
@@ -220,6 +320,7 @@ import {
     alignTokenSequences,
     hasInvalidFootnotes,
     correctReferences,
+    alignTextSegments,
 } from 'baburchi';
 
 // Calculate similarity between two strings
@@ -240,6 +341,12 @@ const lines = [
     { text: '() This is a footnote', isFootnote: true },
 ];
 const corrected = correctReferences(lines);
+
+// Align fragmented text segments
+const aligned = alignTextSegments(
+    ['target line one', '', 'target line three'],
+    ['segment1', 'segment2', 'segment3', 'segment4'],
+);
 ```
 
 ## Noise Detection

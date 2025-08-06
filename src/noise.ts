@@ -225,8 +225,6 @@ export function isBasicNoisePattern(text: string): boolean {
  */
 export function isNonArabicNoise(charStats: CharacterStats, textLength: number, text: string): boolean {
     const contentChars = charStats.arabicCount + charStats.latinCount + charStats.digitCount;
-    const nonContentChars =
-        charStats.symbolCount + charStats.punctuationCount - Math.min(charStats.punctuationCount, 3);
 
     // Text that's mostly symbols or punctuation is likely noise
     if (contentChars === 0) {
@@ -238,8 +236,16 @@ export function isNonArabicNoise(charStats: CharacterStats, textLength: number, 
         return true;
     }
 
-    // High symbol-to-content ratio indicates noise
-    if (nonContentChars / Math.max(contentChars, 1) > 2) {
+    // Special handling for Arabic numerals in parentheses (like "(٦٠١٠).")
+    const hasArabicNumerals = /[٠-٩]/.test(text);
+    if (hasArabicNumerals && charStats.digitCount >= 3) {
+        return false;
+    }
+
+    // High symbol-to-content ratio indicates noise, but be more lenient with punctuation
+    // Allow more punctuation for valid content like references, citations, etc.
+    const adjustedNonContentChars = charStats.symbolCount + Math.max(0, charStats.punctuationCount - 5);
+    if (adjustedNonContentChars / Math.max(contentChars, 1) > 2) {
         return true;
     }
 
@@ -332,6 +338,17 @@ export function isValidArabicContent(charStats: CharacterStats, textLength: numb
 
     // Short Arabic snippets with numbers might be valid (like dates, references)
     if (charStats.arabicCount >= 1 && charStats.digitCount > 0 && textLength <= 20) {
+        return true;
+    }
+
+    // Allow short Arabic words with punctuation (like "له." - "for him/it.")
+    if (charStats.arabicCount >= 2 && charStats.punctuationCount <= 2 && textLength <= 10) {
+        return true;
+    }
+
+    // Allow single meaningful Arabic words that are common standalone terms
+    // This handles cases like pronouns, prepositions, common short words
+    if (charStats.arabicCount >= 1 && textLength <= 5 && charStats.punctuationCount <= 1) {
         return true;
     }
 

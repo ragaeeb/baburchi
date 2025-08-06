@@ -146,6 +146,7 @@ export const fixTypo = (
     return processTextAlignment(original, correction, { highSimilarityThreshold, similarityThreshold, typoSymbols });
 };
 
+export * from './alignment';
 export * from './balance';
 export * from './footnotes';
 export * from './noise';

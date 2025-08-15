@@ -190,9 +190,11 @@ export const handleStandaloneFootnotes = (tokenA: string, tokenB: string): null 
  * @param text - Input text to process
  * @returns Text with standardized Hijri symbols
  */
-export const standardizeHijriSymbol = (text: string) => {
-    // Replace standalone ه with هـ when it appears after Arabic digits (0-9 or ٠-٩) with up to 1 space in between
-    return text.replace(/([0-9\u0660-\u0669])\s?ه(?=\s|$|[^\u0600-\u06FF])/g, '$1 هـ');
+export const standardizeHijriSymbol = (text: string): string => {
+    // Replace standalone ه with هـ when it appears after Arabic digits (0-9 or ٠-٩)
+    // Allow any amount of whitespace between the digit and ه, and consider Arabic punctuation as a boundary.
+    // Boundary rule: only Arabic letters/digits should block replacement; punctuation should not.
+    return text.replace(/([0-9\u0660-\u0669])\s*ه(?=\s|$|[^\u0621-\u063A\u0641-\u064A\u0660-\u0669])/gu, '$1 هـ');
 };
 
 /**
@@ -200,7 +202,7 @@ export const standardizeHijriSymbol = (text: string) => {
  * @param text - Input text to process
  * @returns Text with standardized AH Hijri symbols
  */
-export const standardizeAhHijriSymbol = (text: string) => {
+export const standardizeIntahaSymbol = (text: string) => {
     // Replace standalone اه with اهـ when it appears as a whole word
     // Ensures it's preceded by start/whitespace/non-Arabic AND followed by end/whitespace/non-Arabic
     return text.replace(/(^|\s|[^\u0600-\u06FF])اه(?=\s|$|[^\u0600-\u06FF])/g, `$1${INTAHA_ACTUAL}`);

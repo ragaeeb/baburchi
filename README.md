@@ -189,9 +189,9 @@ Baburchi uses the **Needleman-Wunsch global sequence alignment algorithm** to op
 
 Baburchi works in all modern environments:
 
-- ✅ Node.js 18+
-- ✅ Bun 1.0+
-- ✅ Modern browsers (ES2020+)
+- ✅ Node.js 22+
+- ✅ Bun 1.2.20+
+- ✅ Modern browsers (ES2023+)
 - ✅ Deno (with npm compatibility)
 
 ## TypeScript Support
@@ -331,28 +331,28 @@ const text4 = standardizeHijriSymbol('توفي 632ه'); // 'توفي 632 هـ'
 const text5 = standardizeHijriSymbol('هذا كتاب'); // 'هذا كتاب' (unchanged)
 ```
 
-### `standardizeAhHijriSymbol(text)`
+### `standardizeIntahaSymbol(text)`
 
 Standardizes standalone اه to اهـ when appearing as a whole word, typically used in academic and historical texts.
 
 ```typescript
-import { standardizeAhHijriSymbol } from 'baburchi';
+import { standardizeIntahaSymbol } from 'baburchi';
 
 // Standardize standalone AH abbreviation
-const text1 = standardizeAhHijriSymbol('سنة 1445 اه'); // 'سنة 1445 اهـ'
-const text2 = standardizeAhHijriSymbol('في العام اه'); // 'في العام اهـ'
+const text1 = standardizeIntahaSymbol('سنة 1445 اه'); // 'سنة 1445 اهـ'
+const text2 = standardizeIntahaSymbol('في العام اه'); // 'في العام اهـ'
 
 // Does not affect اه when part of other words
-const text3 = standardizeAhHijriSymbol('الاهتمام بالتاريخ'); // 'الاهتمام بالتاريخ' (unchanged)
+const text3 = standardizeIntahaSymbol('الاهتمام بالتاريخ'); // 'الاهتمام بالتاريخ' (unchanged)
 ```
 
 ### Combined Hijri Standardization
 
 ```typescript
-import { standardizeHijriSymbol, standardizeAhHijriSymbol } from 'baburchi';
+import { standardizeHijriSymbol, standardizeIntahaSymbol } from 'baburchi';
 
 function standardizeAllHijriNotations(text: string): string {
-    return standardizeAhHijriSymbol(standardizeHijriSymbol(text));
+    return standardizeIntahaSymbol(standardizeHijriSymbol(text));
 }
 
 const mixedText = 'وُلد سنة 570 ه وتوفي عام 632 اه';
@@ -374,7 +374,7 @@ import {
     correctReferences,
     alignTextSegments,
     standardizeHijriSymbol,
-    standardizeAhHijriSymbol,
+    standardizeIntahaSymbol,
 } from 'baburchi';
 
 // Calculate similarity between two strings
@@ -404,7 +404,7 @@ const aligned = alignTextSegments(
 
 // Standardize Hijri date symbols
 const hijriText = standardizeHijriSymbol('سنة 1445 ه'); // 'سنة 1445 هـ'
-const ahText = standardizeAhHijriSymbol('عام 632 اه'); // 'عام 632 اهـ'
+const ahText = standardizeIntahaSymbol('عام 632 اه'); // 'عام 632 اهـ'
 ```
 
 ## Noise Detection

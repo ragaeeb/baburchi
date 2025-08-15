@@ -6,7 +6,7 @@ import {
     handleFootnoteSelection,
     handleStandaloneFootnotes,
     normalizeArabicText,
-    standardizeAhHijriSymbol,
+    standardizeIntahaSymbol,
     standardizeHijriSymbol,
     tokenizeText,
 } from './textUtils';
@@ -230,41 +230,41 @@ describe('textUtils', () => {
         });
     });
 
-    describe('standardizeAhHijriSymbol', () => {
+    describe('standardizeIntahaSymbol', () => {
         it('should replace standalone اه with اهـ', () => {
-            expect(standardizeAhHijriSymbol('اه')).toBe('اهـ');
-            expect(standardizeAhHijriSymbol('في اه')).toBe('في اهـ');
+            expect(standardizeIntahaSymbol('اه')).toBe('اهـ');
+            expect(standardizeIntahaSymbol('في اه')).toBe('في اهـ');
         });
 
         it('should replace اه at beginning of string', () => {
-            expect(standardizeAhHijriSymbol('اه والبقية')).toBe('اهـ والبقية');
+            expect(standardizeIntahaSymbol('اه والبقية')).toBe('اهـ والبقية');
         });
 
         it('should replace اه at end of string', () => {
-            expect(standardizeAhHijriSymbol('في السنة اه')).toBe('في السنة اهـ');
+            expect(standardizeIntahaSymbol('في السنة اه')).toBe('في السنة اهـ');
         });
 
         it('should replace اه surrounded by whitespace', () => {
-            expect(standardizeAhHijriSymbol('قبل اه بعد')).toBe('قبل اهـ بعد');
+            expect(standardizeIntahaSymbol('قبل اه بعد')).toBe('قبل اهـ بعد');
         });
 
         it('should replace اه before non-Arabic characters', () => {
-            expect(standardizeAhHijriSymbol('اه.')).toBe('اهـ.');
-            expect(standardizeAhHijriSymbol('العام اه!')).toBe('العام اهـ!');
+            expect(standardizeIntahaSymbol('اه.')).toBe('اهـ.');
+            expect(standardizeIntahaSymbol('العام اه!')).toBe('العام اهـ!');
         });
 
         it('should replace اه after non-Arabic characters', () => {
-            expect(standardizeAhHijriSymbol('.اه')).toBe('.اهـ');
-            expect(standardizeAhHijriSymbol('(اه)')).toBe('(اهـ)');
+            expect(standardizeIntahaSymbol('.اه')).toBe('.اهـ');
+            expect(standardizeIntahaSymbol('(اه)')).toBe('(اهـ)');
         });
 
         it('should not replace اه when part of Arabic word', () => {
-            expect(standardizeAhHijriSymbol('اهتمام')).toBe('اهتمام');
-            expect(standardizeAhHijriSymbol('الاهتمام')).toBe('الاهتمام');
+            expect(standardizeIntahaSymbol('اهتمام')).toBe('اهتمام');
+            expect(standardizeIntahaSymbol('الاهتمام')).toBe('الاهتمام');
         });
 
         it('should handle multiple occurrences', () => {
-            expect(standardizeAhHijriSymbol('اه اه')).toBe('اهـ اهـ');
+            expect(standardizeIntahaSymbol('اه اه')).toBe('اهـ اهـ');
         });
     });
 });

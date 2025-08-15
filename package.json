@@ -1,6 +1,6 @@
 {
     "name": "baburchi",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "author": "Ragaeeb Haq",
     "repository": {
         "type": "git",
@@ -9,24 +9,24 @@
     "main": "dist/index.js",
     "module": "dist/index.ts",
     "devDependencies": {
-        "@eslint/js": "^9.32.0",
-        "@types/bun": "^1.2.19",
-        "eslint": "^9.32.0",
+        "@eslint/js": "^9.33.0",
+        "@types/bun": "^1.2.20",
+        "eslint": "^9.33.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-perfectionist": "^4.15.0",
-        "eslint-plugin-prettier": "^5.5.3",
+        "eslint-plugin-prettier": "^5.5.4",
         "globals": "^16.3.0",
         "prettier": "^3.6.2",
         "semantic-release": "^24.2.7",
         "tsup": "^8.5.0",
-        "typescript-eslint": "^8.39.0"
+        "typescript-eslint": "^8.39.1"
     },
     "bugs": {
         "url": "https://github.com/ragaeeb/baburchi/issues"
     },
     "description": "A lightweight TypeScript library designed to fix typos in OCR post-processing.",
     "engines": {
-        "bun": ">=1.2.19",
+        "bun": ">=1.2.20",
         "node": ">=22.0.0"
     },
     "exports": {

@@ -189,9 +189,9 @@ Baburchi uses the **Needleman-Wunsch global sequence alignment algorithm** to op
 
 Baburchi works in all modern environments:
 
-- ✅ Node.js 18+
-- ✅ Bun 1.0+
-- ✅ Modern browsers (ES2020+)
+- ✅ Node.js 22+
+- ✅ Bun 1.2.20+
+- ✅ Modern browsers (ES2023+)
 - ✅ Deno (with npm compatibility)
 
 ## TypeScript Support
@@ -308,6 +308,58 @@ This function is particularly useful for:
 - Handling cases where text layout affects line ordering
 - Processing documents where content has been split across multiple detection regions
 
+## Hijri Date Standardization
+
+Baburchi includes specialized functions for standardizing Hijri date symbols commonly found in Arabic historical and religious texts. These functions help normalize OCR inconsistencies in Hijri date notation.
+
+### `standardizeHijriSymbol(text)`
+
+Standardizes standalone ه to هـ when following Arabic digits, ensuring proper Hijri date notation.
+
+```typescript
+import { standardizeHijriSymbol } from 'baburchi';
+
+// Standardize after Arabic-Indic digits
+const text1 = standardizeHijriSymbol('سنة ١٤٤٥ ه'); // 'سنة ١٤٤٥ هـ'
+const text2 = standardizeHijriSymbol('عام ٧٥٠ه'); // 'عام ٧٥٠ هـ'
+
+// Standardize after Western digits
+const text3 = standardizeHijriSymbol('في عام 1445 ه'); // 'في عام 1445 هـ'
+const text4 = standardizeHijriSymbol('توفي 632ه'); // 'توفي 632 هـ'
+
+// Does not affect ه when part of other words
+const text5 = standardizeHijriSymbol('هذا كتاب'); // 'هذا كتاب' (unchanged)
+```
+
+### `standardizeIntahaSymbol(text)`
+
+Standardizes standalone اه to اهـ when appearing as a whole word, typically used in academic and historical texts.
+
+```typescript
+import { standardizeIntahaSymbol } from 'baburchi';
+
+// Standardize standalone AH abbreviation
+const text1 = standardizeIntahaSymbol('سنة 1445 اه'); // 'سنة 1445 اهـ'
+const text2 = standardizeIntahaSymbol('في العام اه'); // 'في العام اهـ'
+
+// Does not affect اه when part of other words
+const text3 = standardizeIntahaSymbol('الاهتمام بالتاريخ'); // 'الاهتمام بالتاريخ' (unchanged)
+```
+
+### Combined Hijri Standardization
+
+```typescript
+import { standardizeHijriSymbol, standardizeIntahaSymbol } from 'baburchi';
+
+function standardizeAllHijriNotations(text: string): string {
+    return standardizeIntahaSymbol(standardizeHijriSymbol(text));
+}
+
+const mixedText = 'وُلد سنة 570 ه وتوفي عام 632 اه';
+const standardized = standardizeAllHijriNotations(mixedText);
+console.log(standardized); // 'وُلد سنة 570 هـ وتوفي عام 632 اهـ'
+```
+
 ## Utilities
 
 The library also exports utility functions for advanced use cases:
@@ -321,6 +373,8 @@ import {
     hasInvalidFootnotes,
     correctReferences,
     alignTextSegments,
+    standardizeHijriSymbol,
+    standardizeIntahaSymbol,
 } from 'baburchi';
 
 // Calculate similarity between two strings
@@ -347,6 +401,10 @@ const aligned = alignTextSegments(
     ['target line one', '', 'target line three'],
     ['segment1', 'segment2', 'segment3', 'segment4'],
 );
+
+// Standardize Hijri date symbols
+const hijriText = standardizeHijriSymbol('سنة 1445 ه'); // 'سنة 1445 هـ'
+const ahText = standardizeIntahaSymbol('عام 632 اه'); // 'عام 632 اهـ'
 ```
 
 ## Noise Detection

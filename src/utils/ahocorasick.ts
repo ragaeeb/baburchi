@@ -4,7 +4,7 @@ class ACNode {
     out: number[] = [];
 }
 
-export class AhoCorasick {
+class AhoCorasick {
     private nodes: ACNode[] = [new ACNode()];
 
     add(pattern: string, id: number): void {
@@ -59,4 +59,19 @@ export class AhoCorasick {
             }
         }
     }
+}
+
+/**
+ * Builds Aho-Corasick automaton for exact matching
+ */
+export function buildAhoCorasick(patterns: string[]): AhoCorasick {
+    const ac = new AhoCorasick();
+    for (let pid = 0; pid < patterns.length; pid++) {
+        const pat = patterns[pid];
+        if (pat.length > 0) {
+            ac.add(pat, pid);
+        }
+    }
+    ac.build();
+    return ac;
 }

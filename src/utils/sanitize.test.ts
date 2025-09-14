@@ -175,7 +175,7 @@ describe('cleaning > makeDiacriticInsensitiveRegex', () => {
         it('composes sources using makeDiacriticInsensitiveRegex (RegExp)', () => {
             const words = ['أنا', 'الى'];
             const pieces = words.map((w) => makeDiacriticInsensitiveRegex(w).source);
-            const rx = new RegExp(`^(?:${pieces.join('|')})` + escapeRegex(' الافاق') + '.*$', 'mu');
+            const rx = new RegExp(`^(?:${pieces.join('|')})${escapeRegex(' الافاق')}.*$`, 'mu');
 
             expect(rx.test('انا الافاق')).toBe(true);
             expect(rx.test('إِلى الافاق')).toBe(true);

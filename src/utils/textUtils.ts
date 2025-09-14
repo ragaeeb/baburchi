@@ -22,9 +22,6 @@ export const PATTERNS = {
     /** Matches footnote references with Arabic-Indic digits in parentheses: \([\u0660-\u0669]+\) */
     arabicReferenceRegex: /\([\u0660-\u0669]+\)/g,
 
-    /** Matches Arabic diacritical marks (harakat, tanween, etc.) */
-    diacritics: /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g,
-
     /** Matches embedded footnotes within text: \([0-9\u0660-\u0669]+\) */
     footnoteEmbedded: /\([0-9\u0660-\u0669]+\)/,
 
@@ -40,25 +37,8 @@ export const PATTERNS = {
     /** Matches OCR-confused footnote references with characters commonly misread as Arabic digits */
     ocrConfusedReferenceRegex: /\([.1OV9]+\)/g,
 
-    /** Matches Arabic tatweel (kashida) character used for text stretching */
-    tatweel: /\u0640/g,
-
     /** Matches one or more whitespace characters */
     whitespace: /\s+/,
-};
-
-/**
- * Normalizes Arabic text by removing diacritics, and tatweel marks.
- * This normalization enables better text comparison by focusing on core characters
- * while ignoring decorative elements that don't affect meaning.
- *
- * @param text - Arabic text to normalize
- * @returns Normalized text with diacritics, tatweel, and basic tags removed
- * @example
- * normalizeArabicText('اَلسَّلَامُ عَلَيْكُمْ') // Returns 'السلام عليكم'
- */
-export const normalizeArabicText = (text: string): string => {
-    return text.replace(PATTERNS.tatweel, '').replace(PATTERNS.diacritics, '').trim();
 };
 
 /**

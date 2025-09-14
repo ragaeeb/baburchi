@@ -23,6 +23,11 @@
                 "noExplicitAny": "off"
             },
             "style": {
+                "useTemplate": {
+                    "level": "warn",
+                    "fix": "safe",
+                    "options": {}
+                },
                 "noNonNullAssertion": "off",
                 "useBlockStatements": {
                     "level": "error",

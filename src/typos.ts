@@ -1,10 +1,10 @@
-import { alignTokenSequences, areSimilarAfterNormalization, calculateSimilarity } from './similarity';
 import type { FixTypoOptions } from './types';
+import { sanitizeArabic } from './utils/sanitize';
+import { alignTokenSequences, areSimilarAfterNormalization, calculateSimilarity } from './utils/similarity';
 import {
     handleFootnoteFusion,
     handleFootnoteSelection,
     handleStandaloneFootnotes,
-    normalizeArabicText,
     tokenizeText,
 } from './utils/textUtils';
 
@@ -32,7 +32,7 @@ const selectBestTokens = (
     }
 
     // Preserve original if same after normalization (keeps diacritics)
-    if (normalizeArabicText(originalToken) === normalizeArabicText(altToken)) {
+    if (sanitizeArabic(originalToken) === sanitizeArabic(altToken)) {
         return [originalToken];
     }
 
@@ -55,8 +55,8 @@ const selectBestTokens = (
     }
 
     // Choose based on similarity
-    const normalizedOriginal = normalizeArabicText(originalToken);
-    const normalizedAlt = normalizeArabicText(altToken);
+    const normalizedOriginal = sanitizeArabic(originalToken);
+    const normalizedAlt = sanitizeArabic(altToken);
     const similarity = calculateSimilarity(normalizedOriginal, normalizedAlt);
 
     return [similarity > similarityThreshold ? originalToken : altToken];

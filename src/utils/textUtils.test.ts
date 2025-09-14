@@ -5,37 +5,12 @@ import {
     handleFootnoteFusion,
     handleFootnoteSelection,
     handleStandaloneFootnotes,
-    normalizeArabicText,
-    standardizeIntahaSymbol,
     standardizeHijriSymbol,
+    standardizeIntahaSymbol,
     tokenizeText,
 } from './textUtils';
 
 describe('textUtils', () => {
-    describe('normalizeArabicText', () => {
-        it('should remove diacritics from Arabic text', () => {
-            const input = 'اَلسَّلَامُ عَلَيْكُمْ';
-            const expected = 'السلام عليكم';
-            expect(normalizeArabicText(input)).toBe(expected);
-        });
-
-        it('should remove tatweel marks', () => {
-            const input = 'الـــرحـــمن';
-            const expected = 'الرحمن';
-            expect(normalizeArabicText(input)).toBe(expected);
-        });
-
-        it('should handle empty string', () => {
-            expect(normalizeArabicText('')).toBe('');
-        });
-
-        it('should trim whitespace', () => {
-            const input = '  النص  ';
-            const expected = 'النص';
-            expect(normalizeArabicText(input)).toBe(expected);
-        });
-    });
-
     describe('extractDigits', () => {
         it('should extract Arabic digits', () => {
             const input = '(٥)أخرجه البخاري';

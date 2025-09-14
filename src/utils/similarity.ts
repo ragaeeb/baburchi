@@ -1,5 +1,5 @@
-import { calculateLevenshteinDistance } from './utils/leventhein';
-import { normalizeArabicText } from './utils/textUtils';
+import { calculateLevenshteinDistance } from './leventhein';
+import { sanitizeArabic } from './sanitize';
 
 // Alignment scoring constants
 const ALIGNMENT_SCORES = {
@@ -7,7 +7,7 @@ const ALIGNMENT_SCORES = {
     MISMATCH_PENALTY: -2,
     PERFECT_MATCH: 2,
     SOFT_MATCH: 1,
-};
+} as const;
 
 /**
  * Calculates similarity ratio between two strings as a value between 0.0 and 1.0.
@@ -40,8 +40,8 @@ export const calculateSimilarity = (textA: string, textB: string): number => {
  * areSimilarAfterNormalization('السَّلام', 'السلام', 0.9) // Returns true
  */
 export const areSimilarAfterNormalization = (textA: string, textB: string, threshold: number = 0.6): boolean => {
-    const normalizedA = normalizeArabicText(textA);
-    const normalizedB = normalizeArabicText(textB);
+    const normalizedA = sanitizeArabic(textA);
+    const normalizedB = sanitizeArabic(textB);
     return calculateSimilarity(normalizedA, normalizedB) >= threshold;
 };
 
@@ -65,23 +65,17 @@ export const calculateAlignmentScore = (
     typoSymbols: string[],
     similarityThreshold: number,
 ): number => {
-    const normalizedA = normalizeArabicText(tokenA);
-    const normalizedB = normalizeArabicText(tokenB);
+    const normalizedA = sanitizeArabic(tokenA);
+    const normalizedB = sanitizeArabic(tokenB);
 
-    // Perfect match after normalization
     if (normalizedA === normalizedB) {
         return ALIGNMENT_SCORES.PERFECT_MATCH;
     }
 
-    // Check if either token is a typo symbol or high similarity
     const isTypoSymbol = typoSymbols.includes(tokenA) || typoSymbols.includes(tokenB);
     const isHighlySimilar = calculateSimilarity(normalizedA, normalizedB) >= similarityThreshold;
 
-    if (isTypoSymbol || isHighlySimilar) {
-        return ALIGNMENT_SCORES.SOFT_MATCH;
-    }
-
-    return ALIGNMENT_SCORES.MISMATCH_PENALTY;
+    return isTypoSymbol || isHighlySimilar ? ALIGNMENT_SCORES.SOFT_MATCH : ALIGNMENT_SCORES.MISMATCH_PENALTY;
 };
 
 type AlignedTokenPair = [null | string, null | string];
@@ -133,6 +127,44 @@ export const backtrackAlignment = (
 };
 
 /**
+ * Initializes the scoring matrix with gap penalties.
+ */
+const initializeScoringMatrix = (lengthA: number, lengthB: number): AlignmentCell[][] => {
+    const matrix: AlignmentCell[][] = Array.from({ length: lengthA + 1 }, () =>
+        Array.from({ length: lengthB + 1 }, () => ({ direction: null, score: 0 })),
+    );
+
+    // Initialize first row and column with gap penalties
+    for (let i = 1; i <= lengthA; i++) {
+        matrix[i][0] = { direction: 'up', score: i * ALIGNMENT_SCORES.GAP_PENALTY };
+    }
+    for (let j = 1; j <= lengthB; j++) {
+        matrix[0][j] = { direction: 'left', score: j * ALIGNMENT_SCORES.GAP_PENALTY };
+    }
+
+    return matrix;
+};
+
+/**
+ * Determines the best alignment direction and score for a cell.
+ */
+const getBestAlignment = (
+    diagonalScore: number,
+    upScore: number,
+    leftScore: number,
+): { direction: 'diagonal' | 'up' | 'left'; score: number } => {
+    const maxScore = Math.max(diagonalScore, upScore, leftScore);
+
+    if (maxScore === diagonalScore) {
+        return { direction: 'diagonal', score: maxScore };
+    }
+    if (maxScore === upScore) {
+        return { direction: 'up', score: maxScore };
+    }
+    return { direction: 'left', score: maxScore };
+};
+
+/**
  * Performs global sequence alignment using the Needleman-Wunsch algorithm.
  * Aligns two token sequences to find the optimal pairing that maximizes
  * the total alignment score, handling insertions, deletions, and substitutions.
@@ -155,18 +187,7 @@ export const alignTokenSequences = (
     const lengthA = tokensA.length;
     const lengthB = tokensB.length;
 
-    // Initialize scoring matrix
-    const scoringMatrix: AlignmentCell[][] = Array.from({ length: lengthA + 1 }, () =>
-        Array.from({ length: lengthB + 1 }, () => ({ direction: null, score: 0 })),
-    );
-
-    // Initialize first row and column
-    for (let i = 1; i <= lengthA; i++) {
-        scoringMatrix[i][0] = { direction: 'up', score: i * ALIGNMENT_SCORES.GAP_PENALTY };
-    }
-    for (let j = 1; j <= lengthB; j++) {
-        scoringMatrix[0][j] = { direction: 'left', score: j * ALIGNMENT_SCORES.GAP_PENALTY };
-    }
+    const matrix = initializeScoringMatrix(lengthA, lengthB);
 
     // Fill scoring matrix
     for (let i = 1; i <= lengthA; i++) {
@@ -178,23 +199,14 @@ export const alignTokenSequences = (
                 similarityThreshold,
             );
 
-            const diagonalScore = scoringMatrix[i - 1][j - 1].score + alignmentScore;
-            const upScore = scoringMatrix[i - 1][j].score + ALIGNMENT_SCORES.GAP_PENALTY;
-            const leftScore = scoringMatrix[i][j - 1].score + ALIGNMENT_SCORES.GAP_PENALTY;
+            const diagonalScore = matrix[i - 1][j - 1].score + alignmentScore;
+            const upScore = matrix[i - 1][j].score + ALIGNMENT_SCORES.GAP_PENALTY;
+            const leftScore = matrix[i][j - 1].score + ALIGNMENT_SCORES.GAP_PENALTY;
 
-            const bestScore = Math.max(diagonalScore, upScore, leftScore);
-            let bestDirection: 'diagonal' | 'left' | 'up' = 'left';
-
-            if (bestScore === diagonalScore) {
-                bestDirection = 'diagonal';
-            } else if (bestScore === upScore) {
-                bestDirection = 'up';
-            }
-
-            scoringMatrix[i][j] = { direction: bestDirection, score: bestScore };
+            const { direction, score } = getBestAlignment(diagonalScore, upScore, leftScore);
+            matrix[i][j] = { direction, score };
         }
     }
 
-    // Backtrack to build alignment
-    return backtrackAlignment(scoringMatrix, tokensA, tokensB);
+    return backtrackAlignment(matrix, tokensA, tokensB);
 };

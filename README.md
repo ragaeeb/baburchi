@@ -162,6 +162,35 @@ const corrected = fixTypo(textWithFootnotes, reference, {
 // Result preserves footnote formatting
 ```
 
+## sanitizeArabic — unified Arabic text sanitizer
+
+`sanitizeArabic(input, optionsOrPreset)` provides fast, configurable cleanup for Arabic text and replaces older per-rule utilities.
+It supports presets (`"light"`, `"search"`, `"aggressive"`) and fine-grained options like `stripDiacritics`, `stripTatweel`, `normalizeAlif`,
+`replaceAlifMaqsurah`, `replaceTaMarbutahWithHa`, `stripZeroWidth`, `zeroWidthToSpace`, `stripLatinAndSymbols`, `lettersAndSpacesOnly`,
+`keepOnlyArabicLetters`, `collapseWhitespace`, `trim`, and `removeHijriMarker`. For one-off rules, use `base: 'none'` to apply only what you specify.
+
+**Examples**
+
+```ts
+import { sanitizeArabic } from 'bitaboom';
+
+// Light display cleanup
+sanitizeArabic('  مرحبا\u200C\u200D   بالعالم  ', 'light'); // → 'مرحبا بالعالم'
+
+// Tolerant search normalization
+sanitizeArabic('اَلسَّلَامُ عَلَيْكُمْ', 'search'); // → 'السلام عليكم'
+
+// Indexing-friendly text (letters + spaces only)
+sanitizeArabic('اَلسَّلَامُ 1435/3/29 هـ — www', 'aggressive'); // → 'السلام'
+
+// Tatweel-only, preserving dates/list markers
+sanitizeArabic('أبـــتِـــكَةُ', { base: 'none', stripTatweel: true }); // → 'أبتِكَةُ'
+
+// Zero-width controls → spaces
+sanitizeArabic('يَخْلُوَ ‏. ‏ قَالَ غَرِيبٌ ‏. ‏', { base: 'none', stripZeroWidth: true, zeroWidthToSpace: true });
+// → 'يَخْلُوَ  .   قَالَ غَرِيبٌ  .  '
+```
+
 ## Algorithm Overview
 
 Baburchi uses the **Needleman-Wunsch global sequence alignment algorithm** to optimally align text tokens:
@@ -367,7 +396,6 @@ The library also exports utility functions for advanced use cases:
 ```typescript
 import {
     calculateSimilarity,
-    normalizeArabicText,
     tokenizeText,
     alignTokenSequences,
     hasInvalidFootnotes,
@@ -379,9 +407,6 @@ import {
 
 // Calculate similarity between two strings
 const similarity = calculateSimilarity('hello', 'helo'); // 0.8
-
-// Normalize Arabic text
-const normalized = normalizeArabicText('اَلسَّلَامُ'); // 'السلام'
 
 // Tokenize with symbol preservation
 const tokens = tokenizeText('محمد ﷺ رسول', ['ﷺ']); // ['محمد', 'ﷺ', 'رسول']

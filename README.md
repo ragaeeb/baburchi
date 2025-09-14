@@ -62,7 +62,9 @@ const noiseText = isArabicTextNoise('---'); // true
 
 ## API Reference
 
-### `fixTypo(original, correction, options)`
+### Core Text Processing
+
+#### `fixTypo(original, correction, options)`
 
 The main function for correcting typos using text alignment.
 
@@ -80,7 +82,7 @@ The main function for correcting typos using text alignment.
 
 **Returns:** Corrected text string
 
-### `processTextAlignment(originalText, altText, options)`
+#### `processTextAlignment(originalText, altText, options)`
 
 Low-level function for advanced text processing with full configuration control.
 
@@ -89,6 +91,167 @@ Low-level function for advanced text processing with full configuration control.
 - `originalText` (string): Original text to process
 - `altText` (string): Reference text for alignment
 - `options` (FixTypoOptions): Complete configuration object
+
+### Fuzzy Text Matching
+
+#### `findMatches(pages, excerpts, policy?)`
+
+Finds the best matching page for each excerpt using exact and fuzzy matching algorithms.
+
+**Parameters:**
+
+- `pages` (string[]): Array of page texts to search within
+- `excerpts` (string[]): Array of text excerpts to find
+- `policy` (MatchPolicy, optional): Matching configuration
+
+**Returns:** `number[]` - Array of page indices (0-based) where each excerpt was found, or -1 if not found
+
+**Example:**
+
+```typescript
+import { findMatches } from 'baburchi';
+
+const pages = [
+    'هذا النص في الصفحة الأولى مع محتوى إضافي',
+    'النص الثاني يظهر هنا في الصفحة الثانية',
+    'الصفحة الثالثة تحتوي على نص مختلف'
+];
+
+const excerpts = [
+    'النص في الصفحة الأولى',
+    'النص الثاني يظهر',
+    'نص غير موجود'
+];
+
+const matches = findMatches(pages, excerpts);
+console.log(matches); // [0, 1, -1]
+```
+
+#### `findMatchesAll(pages, excerpts, policy?)`
+
+Finds all potential matches for each excerpt, ranked by match quality.
+
+**Parameters:**
+
+- `pages` (string[]): Array of page texts to search within
+- `excerpts` (string[]): Array of text excerpts to find
+- `policy` (MatchPolicy, optional): Matching configuration
+
+**Returns:** `number[][]` - Array where each element is an array of page indices ranked by match quality (exact matches first, then fuzzy matches by score)
+
+**Example:**
+
+```typescript
+import { findMatchesAll } from 'baburchi';
+
+const pages = [
+    'النص الأول مع محتوى مشابه',
+    'محتوى مشابه في النص الثاني',
+    'النص الأول بصيغة مختلفة قليلاً'
+];
+
+const excerpts = ['النص الأول'];
+
+const allMatches = findMatchesAll(pages, excerpts);
+console.log(allMatches); // [[0, 2]] - excerpt matches page 0 exactly, page 2 fuzzily
+```
+
+#### Match Policy Configuration
+
+The `MatchPolicy` interface allows fine-tuning of the matching algorithm:
+
+```typescript
+interface MatchPolicy {
+    enableFuzzy?: boolean;           // Enable fuzzy matching (default: true)
+    maxEditAbs?: number;             // Max absolute edit distance (default: 4)
+    maxEditRel?: number;             // Max relative edit distance (default: 0.25)
+    q?: number;                      // Q-gram size for indexing (default: 3)
+    gramsPerExcerpt?: number;        // Q-grams to sample per excerpt (default: 20)
+    maxCandidatesPerExcerpt?: number; // Max candidates to evaluate (default: 100)
+    seamLen?: number;                // Cross-page seam length (default: 50)
+}
+```
+
+**Example with custom policy:**
+
+```typescript
+import { findMatches } from 'baburchi';
+
+const customPolicy: MatchPolicy = {
+    enableFuzzy: true,
+    maxEditAbs: 6,           // Allow more character differences
+    maxEditRel: 0.3,         // Allow 30% character differences
+    q: 4,                    // Use 4-grams for better precision
+    gramsPerExcerpt: 30,     // Sample more Q-grams
+    maxCandidatesPerExcerpt: 150
+};
+
+const matches = findMatches(pages, excerpts, customPolicy);
+```
+
+### Arabic Text Normalization
+
+#### `sanitizeArabic(input, optionsOrPreset)`
+
+Unified Arabic text sanitizer that provides fast, configurable cleanup for Arabic text.
+
+**Parameters:**
+
+- `input` (string): The Arabic text to sanitize
+- `optionsOrPreset` (string | object): Either a preset name or custom options
+
+**Presets:**
+
+- `"light"`: Basic cleanup for display (strips zero-width chars, collapses whitespace)
+- `"search"`: Tolerant search normalization (removes diacritics, normalizes letters)
+- `"aggressive"`: Indexing-friendly (letters and spaces only, removes everything else)
+
+**Custom Options:**
+
+```typescript
+interface SanitizeOptions {
+    base?: 'light' | 'search' | 'aggressive' | 'none';
+    stripDiacritics?: boolean;
+    stripTatweel?: boolean;
+    normalizeAlif?: boolean;
+    replaceAlifMaqsurah?: boolean;
+    replaceTaMarbutahWithHa?: boolean;
+    stripZeroWidth?: boolean;
+    zeroWidthToSpace?: boolean;
+    stripLatinAndSymbols?: boolean;
+    lettersAndSpacesOnly?: boolean;
+    keepOnlyArabicLetters?: boolean;
+    collapseWhitespace?: boolean;
+    trim?: boolean;
+    removeHijriMarker?: boolean;
+}
+```
+
+**Examples:**
+
+```typescript
+import { sanitizeArabic } from 'baburchi';
+
+// Light display cleanup
+sanitizeArabic('  مرحبا\u200C\u200D   بالعالم  ', 'light'); // → 'مرحبا بالعالم'
+
+// Tolerant search normalization
+sanitizeArabic('اَلسَّلَامُ عَلَيْكُمْ', 'search'); // → 'السلام عليكم'
+
+// Indexing-friendly text (letters + spaces only)
+sanitizeArabic('اَلسَّلَامُ 1435/3/29 هـ — www', 'aggressive'); // → 'السلام'
+
+// Custom: Tatweel-only, preserving dates/list markers
+sanitizeArabic('أبـــتِـــكَةُ', { base: 'none', stripTatweel: true }); // → 'أبتِكَةُ'
+
+// Zero-width controls → spaces
+sanitizeArabic('يَخْلُوَ ‏. ‏ قَالَ غَرِيبٌ ‏. ‏', { 
+    base: 'none', 
+    stripZeroWidth: true, 
+    zeroWidthToSpace: true 
+});
+// → 'يَخْلُوَ  .   قَالَ غَرِيبٌ  .  '
+```
 
 ## Usage Examples
 
@@ -160,35 +323,6 @@ const corrected = fixTypo(textWithFootnotes, reference, {
     typoSymbols: [],
 });
 // Result preserves footnote formatting
-```
-
-## sanitizeArabic — unified Arabic text sanitizer
-
-`sanitizeArabic(input, optionsOrPreset)` provides fast, configurable cleanup for Arabic text and replaces older per-rule utilities.
-It supports presets (`"light"`, `"search"`, `"aggressive"`) and fine-grained options like `stripDiacritics`, `stripTatweel`, `normalizeAlif`,
-`replaceAlifMaqsurah`, `replaceTaMarbutahWithHa`, `stripZeroWidth`, `zeroWidthToSpace`, `stripLatinAndSymbols`, `lettersAndSpacesOnly`,
-`keepOnlyArabicLetters`, `collapseWhitespace`, `trim`, and `removeHijriMarker`. For one-off rules, use `base: 'none'` to apply only what you specify.
-
-**Examples**
-
-```ts
-import { sanitizeArabic } from 'bitaboom';
-
-// Light display cleanup
-sanitizeArabic('  مرحبا\u200C\u200D   بالعالم  ', 'light'); // → 'مرحبا بالعالم'
-
-// Tolerant search normalization
-sanitizeArabic('اَلسَّلَامُ عَلَيْكُمْ', 'search'); // → 'السلام عليكم'
-
-// Indexing-friendly text (letters + spaces only)
-sanitizeArabic('اَلسَّلَامُ 1435/3/29 هـ — www', 'aggressive'); // → 'السلام'
-
-// Tatweel-only, preserving dates/list markers
-sanitizeArabic('أبـــتِـــكَةُ', { base: 'none', stripTatweel: true }); // → 'أبتِكَةُ'
-
-// Zero-width controls → spaces
-sanitizeArabic('يَخْلُوَ ‏. ‏ قَالَ غَرِيبٌ ‏. ‏', { base: 'none', stripZeroWidth: true, zeroWidthToSpace: true });
-// → 'يَخْلُوَ  .   قَالَ غَرِيبٌ  .  '
 ```
 
 ## Algorithm Overview

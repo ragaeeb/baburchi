@@ -291,6 +291,72 @@ function recordExactMatches(
 }
 
 /**
+ * Processes a single fuzzy candidate and updates hits if better match found
+ */
+function processFuzzyCandidate(
+    candidate: Candidate,
+    excerpt: string,
+    pagesN: string[],
+    seams: SeamData[],
+    maxDist: number,
+    hits: Map<number, PageHit>,
+    keyset: Set<string>,
+): void {
+    const key = `${candidate.page}:${candidate.start}:${candidate.seam ? 1 : 0}`;
+    if (keyset.has(key)) {
+        return;
+    }
+    keyset.add(key);
+
+    const dist = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
+    if (dist === null) {
+        return;
+    }
+
+    const score = 1 - dist / maxDist; // in (0, 1], higher is better
+    const entry = hits.get(candidate.page);
+    if (!entry || (!entry.exact && score > entry.score)) {
+        hits.set(candidate.page, { score, exact: false });
+    }
+}
+
+/**
+ * Processes fuzzy matching for a single excerpt
+ */
+function processSingleExcerptFuzzy(
+    excerptIndex: number,
+    excerpt: string,
+    pagesN: string[],
+    seams: SeamData[],
+    qidx: QGramIndex,
+    hitsByExcerpt: Array<Map<number, PageHit>>,
+    cfg: Required<MatchPolicy>,
+): void {
+    // Skip if we already have exact hits
+    const hasExactHits = Array.from(hitsByExcerpt[excerptIndex].values()).some((v) => v.exact);
+    if (hasExactHits) {
+        return;
+    }
+
+    if (!excerpt || excerpt.length < cfg.q) {
+        return;
+    }
+
+    const candidates = generateCandidates(excerpt, qidx, cfg);
+    if (candidates.length === 0) {
+        return;
+    }
+
+    const maxDist = Math.max(cfg.maxEditAbs, Math.ceil(cfg.maxEditRel * excerpt.length));
+    const keyset = new Set<string>();
+    const hits = hitsByExcerpt[excerptIndex];
+
+    for (const candidate of candidates) {
+        processFuzzyCandidate(candidate, excerpt, pagesN, seams, maxDist, hits, keyset);
+    }
+}
+
+/**
  * Records fuzzy matches for excerpts without exact matches
  */
 function recordFuzzyMatches(
@@ -303,43 +369,7 @@ function recordFuzzyMatches(
     const qidx = buildQGramIndex(pagesN, seams, cfg.q);
 
     for (let i = 0; i < excerptsN.length; i++) {
-        // Skip if we already have exact hits
-        const hasExactHits = Array.from(hitsByExcerpt[i].values()).some((v) => v.exact);
-        if (hasExactHits) {
-            continue;
-        }
-
-        const excerpt = excerptsN[i];
-        if (!excerpt || excerpt.length < cfg.q) {
-            continue;
-        }
-
-        const candidates = generateCandidates(excerpt, qidx, cfg);
-        if (candidates.length === 0) {
-            continue;
-        }
-
-        const maxDist = Math.max(cfg.maxEditAbs, Math.ceil(cfg.maxEditRel * excerpt.length));
-        const keyset = new Set<string>();
-
-        for (const candidate of candidates) {
-            const key = `${candidate.page}:${candidate.start}:${candidate.seam ? 1 : 0}`;
-            if (keyset.has(key)) {
-                continue;
-            }
-            keyset.add(key);
-
-            const dist = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
-            if (dist === null) {
-                continue;
-            }
-
-            const score = 1 - dist / maxDist; // in (0, 1], higher is better
-            const entry = hitsByExcerpt[i].get(candidate.page);
-            if (!entry || (!entry.exact && score > entry.score)) {
-                hitsByExcerpt[i].set(candidate.page, { score, exact: false });
-            }
-        }
+        processSingleExcerptFuzzy(i, excerptsN[i], pagesN, seams, qidx, hitsByExcerpt, cfg);
     }
 }
 

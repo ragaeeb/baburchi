@@ -22,9 +22,6 @@ export const PATTERNS = {
     /** Matches footnote references with Arabic-Indic digits in parentheses: \([\u0660-\u0669]+\) */
     arabicReferenceRegex: /\([\u0660-\u0669]+\)/g,
 
-    /** Matches Arabic diacritical marks (harakat, tanween, etc.) */
-    diacritics: /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g,
-
     /** Matches embedded footnotes within text: \([0-9\u0660-\u0669]+\) */
     footnoteEmbedded: /\([0-9\u0660-\u0669]+\)/,
 
@@ -40,25 +37,8 @@ export const PATTERNS = {
     /** Matches OCR-confused footnote references with characters commonly misread as Arabic digits */
     ocrConfusedReferenceRegex: /\([.1OV9]+\)/g,
 
-    /** Matches Arabic tatweel (kashida) character used for text stretching */
-    tatweel: /\u0640/g,
-
     /** Matches one or more whitespace characters */
     whitespace: /\s+/,
-};
-
-/**
- * Normalizes Arabic text by removing diacritics, and tatweel marks.
- * This normalization enables better text comparison by focusing on core characters
- * while ignoring decorative elements that don't affect meaning.
- *
- * @param text - Arabic text to normalize
- * @returns Normalized text with diacritics, tatweel, and basic tags removed
- * @example
- * normalizeArabicText('اَلسَّلَامُ عَلَيْكُمْ') // Returns 'السلام عليكم'
- */
-export const normalizeArabicText = (text: string): string => {
-    return text.replace(PATTERNS.tatweel, '').replace(PATTERNS.diacritics, '').trim();
 };
 
 /**
@@ -78,8 +58,8 @@ export const extractDigits = (text: string): string => {
 
 /**
  * Tokenizes text into individual words while preserving special symbols.
- * Removes HTML tags, adds spacing around preserved symbols to ensure they
- * are tokenized separately, then splits on whitespace.
+ * Adds spacing around preserved symbols to ensure they are tokenized separately,
+ * then splits on whitespace.
  *
  * @param text - Text to tokenize
  * @param preserveSymbols - Array of symbols that should be tokenized as separate tokens
@@ -151,8 +131,12 @@ export const handleFootnoteSelection = (tokenA: string, tokenB: string): null | 
     const aHasEmbedded = PATTERNS.footnoteEmbedded.test(tokenA);
     const bHasEmbedded = PATTERNS.footnoteEmbedded.test(tokenB);
 
-    if (aHasEmbedded && !bHasEmbedded) return [tokenA];
-    if (bHasEmbedded && !aHasEmbedded) return [tokenB];
+    if (aHasEmbedded && !bHasEmbedded) {
+        return [tokenA];
+    }
+    if (bHasEmbedded && !aHasEmbedded) {
+        return [tokenB];
+    }
     if (aHasEmbedded && bHasEmbedded) {
         return [tokenA.length <= tokenB.length ? tokenA : tokenB];
     }
@@ -176,8 +160,12 @@ export const handleStandaloneFootnotes = (tokenA: string, tokenB: string): null 
     const aIsFootnote = PATTERNS.footnoteStandalone.test(tokenA);
     const bIsFootnote = PATTERNS.footnoteStandalone.test(tokenB);
 
-    if (aIsFootnote && !bIsFootnote) return [tokenA, tokenB];
-    if (bIsFootnote && !aIsFootnote) return [tokenB, tokenA];
+    if (aIsFootnote && !bIsFootnote) {
+        return [tokenA, tokenB];
+    }
+    if (bIsFootnote && !aIsFootnote) {
+        return [tokenB, tokenA];
+    }
     if (aIsFootnote && bIsFootnote) {
         return [tokenA.length <= tokenB.length ? tokenA : tokenB];
     }
@@ -205,5 +193,5 @@ export const standardizeHijriSymbol = (text: string): string => {
 export const standardizeIntahaSymbol = (text: string) => {
     // Replace standalone اه with اهـ when it appears as a whole word
     // Ensures it's preceded by start/whitespace/non-Arabic AND followed by end/whitespace/non-Arabic
-    return text.replace(/(^|\s|[^\u0600-\u06FF])اه(?=\s|$|[^\u0600-\u06FF])/g, `$1${INTAHA_ACTUAL}`);
+    return text.replace(/(^|\s|[^\u0600-\u06FF])اه(?=\s|$|[^\u0600-\u06FF])/gu, `$1${INTAHA_ACTUAL}`);
 };

@@ -1,47 +1,37 @@
 {
     "name": "baburchi",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "author": "Ragaeeb Haq",
     "repository": {
         "type": "git",
         "url": "https://github.com/ragaeeb/baburchi.git"
     },
     "main": "dist/index.js",
-    "module": "dist/index.ts",
+    "module": "dist/index.js",
     "devDependencies": {
-        "@eslint/js": "^9.33.0",
-        "@types/bun": "^1.2.20",
-        "eslint": "^9.33.0",
-        "eslint-config-prettier": "^10.1.8",
-        "eslint-plugin-perfectionist": "^4.15.0",
-        "eslint-plugin-prettier": "^5.5.4",
-        "globals": "^16.3.0",
-        "prettier": "^3.6.2",
-        "semantic-release": "^24.2.7",
-        "tsup": "^8.5.0",
-        "typescript-eslint": "^8.39.1"
+        "@biomejs/biome": "^2.2.4",
+        "@types/bun": "^1.2.21",
+        "@types/node": "^24.3.3",
+        "semantic-release": "^24.2.8",
+        "tsup": "^8.5.0"
     },
     "bugs": {
         "url": "https://github.com/ragaeeb/baburchi/issues"
     },
     "description": "A lightweight TypeScript library designed to fix typos in OCR post-processing.",
     "engines": {
-        "bun": ">=1.2.20",
+        "bun": ">=1.2.21",
         "node": ">=22.0.0"
     },
+    "sideEffects": false,
     "exports": {
         ".": {
             "import": "./dist/index.js",
             "types": "./dist/index.d.ts"
         }
     },
-    "sideEffects": false,
     "files": [
-        "dist/index.js",
-        "dist/index.js.map",
-        "dist/*.d.ts",
-        "LICENSE.md",
-        "README.md"
+        "dist/**"
     ],
     "homepage": "https://github.com/ragaeeb/baburchi",
     "keywords": [
@@ -57,7 +47,7 @@
     "license": "MIT",
     "scripts": {
         "build": "tsup",
-        "test": "bun test --coverage --coverage-reporter=lcov"
+        "lint": "biome check ."
     },
     "source": "src/index.ts",
     "type": "module",

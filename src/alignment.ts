@@ -1,5 +1,5 @@
-import { areSimilarAfterNormalization, calculateSimilarity } from './similarity';
-import { normalizeArabicText } from './textUtils';
+import { sanitizeArabic } from './utils/sanitize';
+import { areSimilarAfterNormalization, calculateSimilarity } from './utils/similarity';
 
 /**
  * Aligns split text segments to match target lines by finding the best order.
@@ -52,9 +52,9 @@ const findBestSegmentMerge = (targetLine: string, partA: string, partB: string) 
     const mergedForward = `${partA} ${partB}`;
     const mergedReversed = `${partB} ${partA}`;
 
-    const normalizedTarget = normalizeArabicText(targetLine);
-    const scoreForward = calculateSimilarity(normalizedTarget, normalizeArabicText(mergedForward));
-    const scoreReversed = calculateSimilarity(normalizedTarget, normalizeArabicText(mergedReversed));
+    const normalizedTarget = sanitizeArabic(targetLine);
+    const scoreForward = calculateSimilarity(normalizedTarget, sanitizeArabic(mergedForward));
+    const scoreReversed = calculateSimilarity(normalizedTarget, sanitizeArabic(mergedReversed));
 
     return scoreForward >= scoreReversed ? mergedForward : mergedReversed;
 };

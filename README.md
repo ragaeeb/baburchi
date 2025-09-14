@@ -163,12 +163,12 @@ The `MatchPolicy` interface allows fine-tuning of the matching algorithm:
 ```typescript
 interface MatchPolicy {
     enableFuzzy?: boolean;           // Enable fuzzy matching (default: true)
-    maxEditAbs?: number;             // Max absolute edit distance (default: 4)
-    maxEditRel?: number;             // Max relative edit distance (default: 0.25)
-    q?: number;                      // Q-gram size for indexing (default: 3)
-    gramsPerExcerpt?: number;        // Q-grams to sample per excerpt (default: 20)
-    maxCandidatesPerExcerpt?: number; // Max candidates to evaluate (default: 100)
-    seamLen?: number;                // Cross-page seam length (default: 50)
+    maxEditAbs?: number;             // Max absolute edit distance (default: 3)
+    maxEditRel?: number;             // Max relative edit distance (default: 0.1)
+    q?: number;                      // Q-gram size for indexing (default: 4)
+    gramsPerExcerpt?: number;        // Q-grams to sample per excerpt (default: 5)
+    maxCandidatesPerExcerpt?: number; // Max candidates to evaluate (default: 40)
+    seamLen?: number;                // Cross-page seam length (default: 512)
 }
 ```
 
@@ -353,7 +353,7 @@ Baburchi uses the **Needleman-Wunsch global sequence alignment algorithm** to op
 Baburchi works in all modern environments:
 
 - ✅ Node.js 22+
-- ✅ Bun 1.2.20+
+- ✅ Bun 1.2.21+
 - ✅ Modern browsers (ES2023+)
 - ✅ Deno (with npm compatibility)
 

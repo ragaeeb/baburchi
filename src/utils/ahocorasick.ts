@@ -16,7 +16,7 @@ class ACNode {
  * Provides O(n + m + z) time complexity where n is text length,
  * m is total pattern length, and z is number of matches.
  */
-class AhoCorasick {
+export class AhoCorasick {
     /** Array of nodes forming the automaton */
     private nodes: ACNode[] = [new ACNode()];
 
@@ -51,8 +51,9 @@ class AhoCorasick {
             this.nodes[to].link = 0;
             q.push(to);
         }
-        while (q.length) {
-            const v = q.shift()!;
+        for (let qi = 0; qi < q.length; qi++) {
+            const v = q[qi]!;
+
             for (const [ch, to] of this.nodes[v].next) {
                 q.push(to);
                 let link = this.nodes[v].link;
@@ -61,7 +62,10 @@ class AhoCorasick {
                 }
                 const nxt = this.nodes[link].next.get(ch);
                 this.nodes[to].link = nxt === undefined ? 0 : nxt;
-                this.nodes[to].out = this.nodes[to].out.concat(this.nodes[this.nodes[to].link].out);
+                const linkOut = this.nodes[this.nodes[to].link].out;
+                if (linkOut.length) {
+                    this.nodes[to].out.push(...linkOut);
+                }
             }
         }
     }
@@ -106,7 +110,7 @@ class AhoCorasick {
  * });
  * ```
  */
-export function buildAhoCorasick(patterns: string[]): AhoCorasick {
+export const buildAhoCorasick = (patterns: string[]) => {
     const ac = new AhoCorasick();
     for (let pid = 0; pid < patterns.length; pid++) {
         const pat = patterns[pid];
@@ -116,4 +120,4 @@ export function buildAhoCorasick(patterns: string[]): AhoCorasick {
     }
     ac.build();
     return ac;
-}
+};

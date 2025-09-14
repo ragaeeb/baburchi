@@ -1,15 +1,9 @@
 import { buildAhoCorasick } from './ahocorasick';
 
-type BookData = {
-    book: string;
-    starts: number[];
-    lens: number[];
-};
-
 /**
  * Builds a concatenated book from pages with position tracking
  */
-export function buildBook(pagesN: string[]): BookData {
+export function buildBook(pagesN: string[]) {
     const parts: string[] = [];
     const starts: number[] = [];
     const lens: number[] = [];
@@ -66,11 +60,11 @@ export function findExactMatches(
     pageStarts: number[],
     patterns: string[],
     patIdToOrigIdxs: number[][],
-    excerpts: string[],
+    excerptsCount: number,
 ): { result: Int32Array; seenExact: Uint8Array } {
     const ac = buildAhoCorasick(patterns);
-    const result = new Int32Array(excerpts.length).fill(-1);
-    const seenExact = new Uint8Array(excerpts.length);
+    const result = new Int32Array(excerptsCount).fill(-1);
+    const seenExact = new Uint8Array(excerptsCount);
 
     ac.find(book, (pid, endPos) => {
         const pat = patterns[pid];
@@ -88,16 +82,10 @@ export function findExactMatches(
     return { result, seenExact };
 }
 
-type ExcerptPattern = {
-    keyToPatId: Map<string, number>;
-    patIdToOrigIdxs: number[][];
-    patterns: string[];
-};
-
 /**
  * Deduplicates excerpts and creates pattern mapping
  */
-export function deduplicateExcerpts(excerptsN: string[]): ExcerptPattern {
+export function deduplicateExcerpts(excerptsN: string[]) {
     const keyToPatId = new Map<string, number>();
     const patIdToOrigIdxs: number[][] = [];
     const patterns: string[] = [];

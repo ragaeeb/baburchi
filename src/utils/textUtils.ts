@@ -58,8 +58,8 @@ export const extractDigits = (text: string): string => {
 
 /**
  * Tokenizes text into individual words while preserving special symbols.
- * Removes HTML tags, adds spacing around preserved symbols to ensure they
- * are tokenized separately, then splits on whitespace.
+ * Adds spacing around preserved symbols to ensure they are tokenized separately,
+ * then splits on whitespace.
  *
  * @param text - Text to tokenize
  * @param preserveSymbols - Array of symbols that should be tokenized as separate tokens
@@ -193,5 +193,5 @@ export const standardizeHijriSymbol = (text: string): string => {
 export const standardizeIntahaSymbol = (text: string) => {
     // Replace standalone اه with اهـ when it appears as a whole word
     // Ensures it's preceded by start/whitespace/non-Arabic AND followed by end/whitespace/non-Arabic
-    return text.replace(/(^|\s|[^\u0600-\u06FF])اه(?=\s|$|[^\u0600-\u06FF])/g, `$1${INTAHA_ACTUAL}`);
+    return text.replace(/(^|\s|[^\u0600-\u06FF])اه(?=\s|$|[^\u0600-\u06FF])/gu, `$1${INTAHA_ACTUAL}`);
 };

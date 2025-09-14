@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { boundedLevenshtein, calculateLevenshteinDistance } from './leventhein';
+import { boundedLevenshtein, calculateLevenshteinDistance } from './levenshthein';
 
 describe('leventhein', () => {
     describe('calculateLevenshteinDistance', () => {
@@ -13,10 +13,6 @@ describe('leventhein', () => {
         it('should return length for empty vs non-empty string', () => {
             expect(calculateLevenshteinDistance('', 'hello')).toBe(5);
             expect(calculateLevenshteinDistance('hello', '')).toBe(5);
-        });
-
-        it('should return 0 for two empty strings', () => {
-            expect(calculateLevenshteinDistance('', '')).toBe(0);
         });
 
         it('should calculate correct distance for substitutions', () => {

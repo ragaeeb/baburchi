@@ -2,7 +2,7 @@ import type { MatchPolicy } from './types';
 import { buildAhoCorasick } from './utils/ahocorasick';
 import { DEFAULT_POLICY } from './utils/constants';
 import { buildBook, deduplicateExcerpts, findExactMatches, posToPage } from './utils/fuzzyUtils';
-import { boundedLevenshtein } from './utils/leventhein';
+import { boundedLevenshtein } from './utils/levenshthein';
 import { QGramIndex } from './utils/qgram';
 import { sanitizeArabic } from './utils/sanitize';
 
@@ -299,7 +299,7 @@ export function findMatches(pages: string[], excerpts: string[], policy: MatchPo
     const { patIdToOrigIdxs, patterns } = deduplicateExcerpts(excerptsN);
     const { book, starts: pageStarts } = buildBook(pagesN);
 
-    const { result, seenExact } = findExactMatches(book, pageStarts, patterns, patIdToOrigIdxs, excerpts);
+    const { result, seenExact } = findExactMatches(book, pageStarts, patterns, patIdToOrigIdxs, excerpts.length);
 
     if (!seenExact.every((seen) => seen === 1)) {
         performFuzzyMatching(excerptsN, pagesN, seenExact, result, cfg);

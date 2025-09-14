@@ -1,4 +1,4 @@
-import { calculateLevenshteinDistance } from './leventhein';
+import { calculateLevenshteinDistance } from './levenshthein';
 import { sanitizeArabic } from './sanitize';
 
 // Alignment scoring constants
@@ -188,16 +188,23 @@ export const alignTokenSequences = (
     const lengthB = tokensB.length;
 
     const matrix = initializeScoringMatrix(lengthA, lengthB);
+    const typoSymbolsSet = new Set(typoSymbols);
+    const normalizedA = tokensA.map((t) => sanitizeArabic(t));
+    const normalizedB = tokensB.map((t) => sanitizeArabic(t));
 
     // Fill scoring matrix
     for (let i = 1; i <= lengthA; i++) {
         for (let j = 1; j <= lengthB; j++) {
-            const alignmentScore = calculateAlignmentScore(
-                tokensA[i - 1],
-                tokensB[j - 1],
-                typoSymbols,
-                similarityThreshold,
-            );
+            const aNorm = normalizedA[i - 1];
+            const bNorm = normalizedB[j - 1];
+            let alignmentScore: number;
+            if (aNorm === bNorm) {
+                alignmentScore = ALIGNMENT_SCORES.PERFECT_MATCH;
+            } else {
+                const isTypo = typoSymbolsSet.has(tokensA[i - 1]) || typoSymbolsSet.has(tokensB[j - 1]);
+                const highSim = calculateSimilarity(aNorm, bNorm) >= similarityThreshold;
+                alignmentScore = isTypo || highSim ? ALIGNMENT_SCORES.SOFT_MATCH : ALIGNMENT_SCORES.MISMATCH_PENALTY;
+            }
 
             const diagonalScore = matrix[i - 1][j - 1].score + alignmentScore;
             const upScore = matrix[i - 1][j].score + ALIGNMENT_SCORES.GAP_PENALTY;

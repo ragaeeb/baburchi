@@ -117,8 +117,9 @@ export class QGramIndex {
     private addGramsToMap(page: number, text: string, seam: boolean): void {
         for (let i = 0; i + this.q <= text.length; i++) {
             const gram = text.slice(i, i + this.q);
-            const postings = this.map.get(gram) ?? [];
-            if (postings.length === 0) {
+            let postings = this.map.get(gram);
+            if (!postings) {
+                postings = [];
                 this.map.set(gram, postings);
             }
             postings.push({ page, pos: i, seam });
@@ -157,6 +158,7 @@ export class QGramIndex {
      * Picks the rarest grams from an excerpt that exist in the index.
      */
     pickRare(excerpt: string, gramsPerExcerpt: number): { gram: string; offset: number }[] {
+        gramsPerExcerpt = Math.max(1, Math.floor(gramsPerExcerpt));
         const sortedItems = this.extractUniqueGrams(excerpt);
         const selected = selectExistingGrams(this.map, sortedItems, gramsPerExcerpt);
 

@@ -1,15 +1,43 @@
-type Posting = { page: number; pos: number; seam: boolean };
-type GramBase = { gram: string; offset: number };
-type GramItem = GramBase & { freq: number };
+/**
+ * Represents a posting in the inverted index, storing position information.
+ */
+type Posting = {
+    /** Page number where this gram occurs */
+    page: number;
+    /** Position within the page where this gram starts */
+    pos: number;
+    /** Whether this posting is from a seam (cross-page boundary) */
+    seam: boolean;
+};
 
 /**
- * Selects grams that exist in the index from sorted items.
+ * Basic gram information with position offset.
  */
-const selectExistingGrams = (
-    map: Map<string, Posting[]>,
-    sortedItems: GramItem[],
-    gramsPerExcerpt: number,
-): GramBase[] => {
+type GramBase = {
+    /** The q-gram string */
+    gram: string;
+    /** Offset position of this gram in the original text */
+    offset: number;
+};
+
+/**
+ * Extended gram information including frequency data for selection.
+ */
+type GramItem = GramBase & {
+    /** Frequency count of this gram in the corpus */
+    freq: number;
+};
+
+/**
+ * Selects grams that exist in the index from sorted items by frequency.
+ * Prioritizes rarer grams for better discrimination.
+ *
+ * @param map - Inverted index mapping grams to postings
+ * @param sortedItems - Gram items sorted by frequency (rarest first)
+ * @param gramsPerExcerpt - Maximum number of grams to select
+ * @returns Array of selected grams that exist in the index
+ */
+const selectExistingGrams = (map: Map<string, Posting[]>, sortedItems: GramItem[], gramsPerExcerpt: number) => {
     const result: GramBase[] = [];
 
     for (const item of sortedItems) {
@@ -26,12 +54,14 @@ const selectExistingGrams = (
 
 /**
  * Fallback selection when no indexed grams are found in rare items.
+ * Selects from the most common grams as a last resort.
+ *
+ * @param map - Inverted index mapping grams to postings
+ * @param sortedItems - Gram items sorted by frequency
+ * @param gramsPerExcerpt - Maximum number of grams to select
+ * @returns Array of fallback grams from most common items
  */
-const selectFallbackGrams = (
-    map: Map<string, Posting[]>,
-    sortedItems: GramItem[],
-    gramsPerExcerpt: number,
-): GramBase[] => {
+const selectFallbackGrams = (map: Map<string, Posting[]>, sortedItems: GramItem[], gramsPerExcerpt: number) => {
     const result: GramBase[] = [];
 
     for (let i = sortedItems.length - 1; i >= 0 && result.length < gramsPerExcerpt; i--) {
@@ -44,20 +74,46 @@ const selectFallbackGrams = (
     return result;
 };
 
+/**
+ * Q-gram index for efficient fuzzy string matching candidate generation.
+ * Maintains an inverted index of q-grams to their occurrence positions.
+ */
 export class QGramIndex {
+    /** Length of q-grams to index */
     private q: number;
+    /** Inverted index mapping q-grams to their postings */
     private map = new Map<string, Posting[]>();
+    /** Frequency count for each q-gram in the corpus */
     private gramFreq = new Map<string, number>();
 
+    /**
+     * Creates a new Q-gram index with the specified gram length.
+     *
+     * @param q - Length of q-grams to index (typically 3-5)
+     */
     constructor(q: number) {
         this.q = q;
     }
 
+    /**
+     * Adds text to the index, extracting q-grams and building postings.
+     *
+     * @param page - Page number or identifier for this text
+     * @param text - Text content to index
+     * @param seam - Whether this text represents a seam (cross-page boundary)
+     */
     addText(page: number, text: string, seam: boolean): void {
         this.addGramsToMap(page, text, seam);
         this.updateGramFrequencies(text);
     }
 
+    /**
+     * Adds q-grams from text to the inverted index with position information.
+     *
+     * @param page - Page number for the text
+     * @param text - Text to extract grams from
+     * @param seam - Whether this is seam text
+     */
     private addGramsToMap(page: number, text: string, seam: boolean): void {
         for (let i = 0; i + this.q <= text.length; i++) {
             const gram = text.slice(i, i + this.q);

@@ -1,64 +1,60 @@
 import type { MatchPolicy } from './types';
 import { buildAhoCorasick } from './utils/ahocorasick';
 import { DEFAULT_POLICY } from './utils/constants';
-import { buildBook, deduplicateExcerpts, posToPage } from './utils/fuzzyUtils';
+import { buildBook, deduplicateExcerpts, findExactMatches, posToPage } from './utils/fuzzyUtils';
 import { boundedLevenshtein } from './utils/leventhein';
 import { QGramIndex } from './utils/qgram';
 import { sanitizeArabic } from './utils/sanitize';
 
+/**
+ * Represents a candidate match position for fuzzy matching.
+ */
 type Candidate = {
+    /** Page number where the candidate match is found */
     page: number;
+    /** Starting position within the page or seam */
     start: number;
+    /** Whether this candidate is from a seam (cross-page boundary) */
     seam: boolean;
 };
 
+/**
+ * Data structure for cross-page text seams used in fuzzy matching.
+ */
 type SeamData = {
+    /** Combined text from adjacent page boundaries */
     text: string;
+    /** Starting page number for this seam */
     startPage: number;
 };
 
+/**
+ * Represents a fuzzy match result with quality score.
+ */
 type FuzzyMatch = {
+    /** Page number where the match was found */
     page: number;
+    /** Edit distance (lower is better) */
     dist: number;
 };
 
+/**
+ * Represents a page hit with quality metrics for ranking matches.
+ */
 type PageHit = {
+    /** Quality score (0-1, higher is better) */
     score: number;
+    /** Whether this is an exact match */
     exact: boolean;
 };
 
 /**
- * Performs exact matching using Aho-Corasick
- */
-function findExactMatches(
-    book: string,
-    pageStarts: number[],
-    patterns: string[],
-    patIdToOrigIdxs: number[][],
-    excerpts: string[],
-): { result: Int32Array; seenExact: Uint8Array } {
-    const ac = buildAhoCorasick(patterns);
-    const result = new Int32Array(excerpts.length).fill(-1);
-    const seenExact = new Uint8Array(excerpts.length);
-
-    ac.find(book, (pid, endPos) => {
-        const pat = patterns[pid];
-        const startPos = endPos - pat.length;
-        const startPage = posToPage(startPos, pageStarts);
-
-        for (const origIdx of patIdToOrigIdxs[pid]) {
-            if (!seenExact[origIdx]) {
-                result[origIdx] = startPage;
-                seenExact[origIdx] = 1;
-            }
-        }
-    });
-
-    return { result, seenExact };
-}
-
-/**
- * Creates seam data for cross-page matching
+ * Creates seam data for cross-page matching by combining text from adjacent page boundaries.
+ * Seams help find matches that span across page breaks.
+ *
+ * @param pagesN - Array of normalized page texts
+ * @param seamLen - Length of text to take from each page boundary
+ * @returns Array of seam data structures
  */
 function createSeams(pagesN: string[], seamLen: number): SeamData[] {
     const seams: SeamData[] = [];
@@ -72,7 +68,13 @@ function createSeams(pagesN: string[], seamLen: number): SeamData[] {
 }
 
 /**
- * Builds Q-gram index for fuzzy matching
+ * Builds Q-gram index for efficient fuzzy matching candidate generation.
+ * The index contains both regular pages and cross-page seams.
+ *
+ * @param pagesN - Array of normalized page texts
+ * @param seams - Array of seam data for cross-page matching
+ * @param q - Length of q-grams to index
+ * @returns Constructed Q-gram index
  */
 function buildQGramIndex(pagesN: string[], seams: SeamData[], q: number): QGramIndex {
     const qidx = new QGramIndex(q);
@@ -89,9 +91,15 @@ function buildQGramIndex(pagesN: string[], seams: SeamData[], q: number): QGramI
 }
 
 /**
- * Generates candidates for fuzzy matching
+ * Generates fuzzy matching candidates using rare q-grams from the excerpt.
+ * Uses frequency-based selection to find the most discriminative grams.
+ *
+ * @param excerpt - Text excerpt to find candidates for
+ * @param qidx - Q-gram index containing page and seam data
+ * @param cfg - Match policy configuration
+ * @returns Array of candidate match positions
  */
-function generateCandidates(excerpt: string, qidx: QGramIndex, cfg: Required<MatchPolicy>): Candidate[] {
+function generateCandidates(excerpt: string, qidx: QGramIndex, cfg: Required<MatchPolicy>) {
     const seeds = qidx.pickRare(excerpt, cfg.gramsPerExcerpt);
     if (seeds.length === 0) {
         return [];
@@ -132,7 +140,15 @@ function generateCandidates(excerpt: string, qidx: QGramIndex, cfg: Required<Mat
 }
 
 /**
- * Calculates fuzzy match score for a candidate
+ * Calculates fuzzy match score for a candidate using bounded Levenshtein distance.
+ * Extracts a window around the candidate position and computes edit distance.
+ *
+ * @param excerpt - Text excerpt to match
+ * @param candidate - Candidate position to evaluate
+ * @param pagesN - Array of normalized page texts
+ * @param seams - Array of seam data
+ * @param maxDist - Maximum edit distance to consider
+ * @returns Edit distance if within bounds, null otherwise
  */
 function calculateFuzzyScore(
     excerpt: string,
@@ -162,7 +178,15 @@ function calculateFuzzyScore(
 }
 
 /**
- * Finds the best fuzzy match among candidates
+ * Finds the best fuzzy match among candidates by comparing edit distances.
+ * Prioritizes lower edit distance, then earlier page number for tie-breaking.
+ *
+ * @param excerpt - Text excerpt to match
+ * @param candidates - Array of candidate positions to evaluate
+ * @param pagesN - Array of normalized page texts
+ * @param seams - Array of seam data
+ * @param cfg - Match policy configuration
+ * @returns Best fuzzy match or null if none found
  */
 function findBestFuzzyMatch(
     excerpt: string,
@@ -203,7 +227,14 @@ function findBestFuzzyMatch(
 }
 
 /**
- * Performs fuzzy matching for unmatched excerpts
+ * Performs fuzzy matching for excerpts that didn't have exact matches.
+ * Uses Q-gram indexing and bounded Levenshtein distance for efficiency.
+ *
+ * @param excerptsN - Array of normalized excerpts
+ * @param pagesN - Array of normalized page texts
+ * @param seenExact - Flags indicating which excerpts had exact matches
+ * @param result - Result array to update with fuzzy match pages
+ * @param cfg - Match policy configuration
  */
 function performFuzzyMatching(
     excerptsN: string[],
@@ -243,7 +274,21 @@ function performFuzzyMatching(
 }
 
 /**
- * Main function to find single best match per excerpt
+ * Main function to find the single best match per excerpt.
+ * Combines exact matching with fuzzy matching for comprehensive text search.
+ *
+ * @param pages - Array of page texts to search within
+ * @param excerpts - Array of text excerpts to find matches for
+ * @param policy - Optional matching policy configuration
+ * @returns Array of page indices (one per excerpt, -1 if no match found)
+ *
+ * @example
+ * ```typescript
+ * const pages = ['Hello world', 'Goodbye world'];
+ * const excerpts = ['Hello', 'Good bye']; // Note the typo
+ * const matches = findMatches(pages, excerpts, { enableFuzzy: true });
+ * // Returns [0, 1] - exact match on page 0, fuzzy match on page 1
+ * ```
  */
 export function findMatches(pages: string[], excerpts: string[], policy: MatchPolicy = {}) {
     const cfg = { ...DEFAULT_POLICY, ...policy };
@@ -264,7 +309,14 @@ export function findMatches(pages: string[], excerpts: string[], policy: MatchPo
 }
 
 /**
- * Records exact matches for findMatchesAll
+ * Records exact matches for the findMatchesAll function.
+ * Updates the hits tracking structure with exact match information.
+ *
+ * @param book - Concatenated text from all pages
+ * @param pageStarts - Array of starting positions for each page
+ * @param patterns - Array of deduplicated patterns to search for
+ * @param patIdToOrigIdxs - Mapping from pattern IDs to original excerpt indices
+ * @param hitsByExcerpt - Array of maps tracking hits per excerpt
  */
 function recordExactMatches(
     book: string,
@@ -291,7 +343,16 @@ function recordExactMatches(
 }
 
 /**
- * Processes a single fuzzy candidate and updates hits if better match found
+ * Processes a single fuzzy candidate and updates hits if a better match is found.
+ * Used internally by the findMatchesAll function for comprehensive matching.
+ *
+ * @param candidate - Candidate position to evaluate
+ * @param excerpt - Text excerpt being matched
+ * @param pagesN - Array of normalized page texts
+ * @param seams - Array of seam data
+ * @param maxDist - Maximum edit distance threshold
+ * @param hits - Map of page hits to update
+ * @param keyset - Set to track processed candidates (for deduplication)
  */
 function processFuzzyCandidate(
     candidate: Candidate,
@@ -321,7 +382,16 @@ function processFuzzyCandidate(
 }
 
 /**
- * Processes fuzzy matching for a single excerpt
+ * Processes fuzzy matching for a single excerpt in the findMatchesAll function.
+ * Generates candidates and evaluates them for potential matches.
+ *
+ * @param excerptIndex - Index of the excerpt being processed
+ * @param excerpt - Text excerpt to find matches for
+ * @param pagesN - Array of normalized page texts
+ * @param seams - Array of seam data
+ * @param qidx - Q-gram index for candidate generation
+ * @param hitsByExcerpt - Array of maps tracking hits per excerpt
+ * @param cfg - Match policy configuration
  */
 function processSingleExcerptFuzzy(
     excerptIndex: number,
@@ -357,7 +427,13 @@ function processSingleExcerptFuzzy(
 }
 
 /**
- * Records fuzzy matches for excerpts without exact matches
+ * Records fuzzy matches for excerpts that don't have exact matches.
+ * Used by findMatchesAll to provide comprehensive matching results.
+ *
+ * @param excerptsN - Array of normalized excerpts
+ * @param pagesN - Array of normalized page texts
+ * @param hitsByExcerpt - Array of maps tracking hits per excerpt
+ * @param cfg - Match policy configuration
  */
 function recordFuzzyMatches(
     excerptsN: string[],
@@ -374,7 +450,11 @@ function recordFuzzyMatches(
 }
 
 /**
- * Sorts matches by quality and page order
+ * Sorts matches by quality and page order for optimal ranking.
+ * Exact matches are prioritized over fuzzy matches, with secondary sorting by page order.
+ *
+ * @param hits - Map of page hits with quality scores
+ * @returns Array of page numbers sorted by match quality
  */
 function sortMatches(hits: Map<number, PageHit>): number[] {
     if (hits.size === 0) {
@@ -399,7 +479,21 @@ function sortMatches(hits: Map<number, PageHit>): number[] {
 }
 
 /**
- * Main function to find all matches per excerpt, ranked by quality
+ * Main function to find all matches per excerpt, ranked by quality.
+ * Returns comprehensive results with both exact and fuzzy matches for each excerpt.
+ *
+ * @param pages - Array of page texts to search within
+ * @param excerpts - Array of text excerpts to find matches for
+ * @param policy - Optional matching policy configuration
+ * @returns Array of page index arrays (one array per excerpt, sorted by match quality)
+ *
+ * @example
+ * ```typescript
+ * const pages = ['Hello world', 'Hello there', 'Goodbye world'];
+ * const excerpts = ['Hello'];
+ * const matches = findMatchesAll(pages, excerpts);
+ * // Returns [[0, 1]] - both pages 0 and 1 contain "Hello", sorted by page order
+ * ```
  */
 export function findMatchesAll(pages: string[], excerpts: string[], policy: MatchPolicy = {}): number[][] {
     const cfg = { ...DEFAULT_POLICY, ...policy };

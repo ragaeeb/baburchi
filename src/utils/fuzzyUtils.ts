@@ -1,3 +1,5 @@
+import { buildAhoCorasick } from './ahocorasick';
+
 type BookData = {
     book: string;
     starts: number[];
@@ -46,6 +48,44 @@ export function posToPage(pos: number, pageStarts: number[]): number {
         }
     }
     return ans;
+}
+
+/**
+ * Performs exact matching using Aho-Corasick algorithm to find all occurrences
+ * of patterns in the concatenated book text.
+ *
+ * @param book - Concatenated text from all pages
+ * @param pageStarts - Array of starting positions for each page in the book
+ * @param patterns - Array of deduplicated patterns to search for
+ * @param patIdToOrigIdxs - Mapping from pattern IDs to original excerpt indices
+ * @param excerpts - Original array of excerpts (used for length reference)
+ * @returns Object containing result array and exact match flags
+ */
+export function findExactMatches(
+    book: string,
+    pageStarts: number[],
+    patterns: string[],
+    patIdToOrigIdxs: number[][],
+    excerpts: string[],
+): { result: Int32Array; seenExact: Uint8Array } {
+    const ac = buildAhoCorasick(patterns);
+    const result = new Int32Array(excerpts.length).fill(-1);
+    const seenExact = new Uint8Array(excerpts.length);
+
+    ac.find(book, (pid, endPos) => {
+        const pat = patterns[pid];
+        const startPos = endPos - pat.length;
+        const startPage = posToPage(startPos, pageStarts);
+
+        for (const origIdx of patIdToOrigIdxs[pid]) {
+            if (!seenExact[origIdx]) {
+                result[origIdx] = startPage;
+                seenExact[origIdx] = 1;
+            }
+        }
+    });
+
+    return { result, seenExact };
 }
 
 type ExcerptPattern = {

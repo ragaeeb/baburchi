@@ -304,7 +304,7 @@ describe('fuzzy', () => {
         expect(all).toEqual([[0]]);
     });
 
-    it.only('fuzzy: excerpt omits a common blessing phrase present in the page', () => {
+    it('excerpt omits a common blessing phrase present in the page', () => {
         // Page includes "صلى الله عليه وسلم" after "رسول الله" but excerpt omits it.
         const pages = [
             'بشر بن معاوية البكالي .\nروى عنه يعقوب بن محمد الزهري.\nذكره أبو حاتم.\nمجهول.',
@@ -316,7 +316,7 @@ describe('fuzzy', () => {
             'بشر بن مهران الخصاف.\nعن شريك.\nقال ابن أبي حاتم: ترك أبي حديثه.\nويقال بشير.\nقلت: قد روى عنه محمد بن زكريا الغلابي [لكن الغلابي] متهم.\nقال:\nحدثنا شريك، عن الأعمش، عن زيد بن وهب، عن حذيفة، قال: قال رسول الله: من سره أن يحيا حياتي ويموت ميتتي ويتمسك بالقضيب الياقوت فليتول علي بن أبي طالب من بعدي.',
         ];
 
-        const result = findMatches(pages, excerpts);
+        const result = findMatches(pages, excerpts, { log: console.log });
         const all = findMatchesAll(pages, excerpts);
 
         // Should resolve to page index 2 via fuzzy

@@ -46,6 +46,8 @@ type PageHit = {
     score: number;
     /** Whether this is an exact match */
     exact: boolean;
+    /** Whether this hit came from a seam candidate */
+    seam: boolean;
 };
 
 /**
@@ -160,15 +162,13 @@ function calculateFuzzyScore(
     pagesN: string[],
     seams: { text: string }[],
     maxDist: number,
-): number | null {
+): { dist: number; acceptance: number } | null {
     const L = excerpt.length;
 
-    // local padding around the candidate; keep your original heuristics
     const extra = Math.min(maxDist, Math.max(6, Math.ceil(L * 0.12)));
     const half = Math.floor(extra / 2);
     const start0 = candidate.start - half;
 
-    // Helper: build a window, extending across page boundaries both forward and backward.
     const buildWindow = (trimTailEndBy: number = 0, trimHeadStartBy: number = 0): string | null => {
         if (candidate.seam) {
             const seam = seams[candidate.page]?.text;
@@ -189,13 +189,11 @@ function calculateFuzzyScore(
 
         const desired = L + extra;
 
-        // Start index within current page
         let s0 = start0;
         let window = '';
 
-        // Need to prepend from previous pages?
         if (s0 < 0) {
-            let needPre = -s0 + trimHeadStartBy; // optionally trim the very start
+            let needPre = -s0 + trimHeadStartBy;
             let pp = p - 1;
             const bits: string[] = [];
             while (needPre > 0 && pp >= 0) {
@@ -215,13 +213,11 @@ function calculateFuzzyScore(
             s0 = 0;
         }
 
-        // Take from current page
         const end0 = Math.min(base.length - trimTailEndBy, Math.max(0, s0) + desired - window.length);
         if (end0 > s0) {
             window += base.slice(Math.max(0, s0), end0);
         }
 
-        // Append from following pages
         let remaining = desired - window.length;
         let pn = p + 1;
         while (remaining > 0 && pn < pagesN.length) {
@@ -241,7 +237,6 @@ function calculateFuzzyScore(
         return window.length ? window : null;
     };
 
-    // Primary window (no trimming), plus alternative "gap-squeezed" windows if we cross a boundary
     const windows: string[] = [];
     const base = candidate.seam ? seams[candidate.page]?.text : pagesN[candidate.page];
     if (!base) {
@@ -257,7 +252,6 @@ function calculateFuzzyScore(
         windows.push(w0);
     }
 
-    // If we spill past the end of the page, try trimming up to SEAM_GAP_CEILING chars from the page tail
     if (crossesEnd && candidate.page + 1 < pagesN.length) {
         const cut = Math.min(SEAM_GAP_CEILING, Math.max(0, base.length - Math.max(0, start0)));
         if (cut > 0) {
@@ -268,7 +262,6 @@ function calculateFuzzyScore(
         }
     }
 
-    // If we spill before the start of the page, try trimming from the very beginning (head) too
     if (crossesStart && candidate.page > 0) {
         const wTrimHead = buildWindow(0, Math.min(SEAM_GAP_CEILING, -start0));
         if (wTrimHead) {
@@ -276,25 +269,24 @@ function calculateFuzzyScore(
         }
     }
 
-    // Cross-page comparisons get a small extra allowance to absorb boundary junk.
-    const allowance =
+    const acceptance =
         crossesEnd || crossesStart || candidate.seam
             ? maxDist + Math.min(SEAM_BONUS_CAP, Math.ceil(L * 0.08))
             : maxDist;
 
     let best: number | null = null;
     for (const w of windows) {
-        const d = boundedLevenshtein(excerpt, w, allowance);
+        const d = boundedLevenshtein(excerpt, w, acceptance);
         if (d != null && (best == null || d < best)) {
             best = d;
         }
     }
 
     for (const [i, w] of windows.entries()) {
-        console.log?.('window', { allowance, crossesEnd, crossesStart, i, len: w.length });
+        console.log?.('window', { allowance: acceptance, crossesEnd, crossesStart, i, len: w.length });
     }
 
-    return best;
+    return best == null ? null : { acceptance, dist: best };
 }
 
 /**
@@ -321,6 +313,7 @@ function findBestFuzzyMatch(
 
     const maxDist = Math.max(cfg.maxEditAbs, Math.ceil(cfg.maxEditRel * excerpt.length));
     cfg.log('maxDist', maxDist);
+
     const keyset = new Set<string>();
     let best: FuzzyMatch | null = null;
 
@@ -333,9 +326,16 @@ function findBestFuzzyMatch(
 
         cfg.log('keyset', keyset);
 
-        const dist = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
+        const res = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
+        const dist = res?.dist ?? null;
+        const acceptance = res?.acceptance ?? maxDist;
+
         cfg.log('dist', dist);
+
         if (dist === null) {
+            continue;
+        }
+        if (dist > acceptance) {
             continue;
         }
 
@@ -478,7 +478,7 @@ function recordExactMatches(
             const hits = hitsByExcerpt[origIdx];
             const prev = hits.get(startPage);
             if (!prev || !prev.exact) {
-                hits.set(startPage, { exact: true, score: 1 });
+                hits.set(startPage, { exact: true, score: 1, seam: false });
             }
         }
     });
@@ -511,15 +511,21 @@ function processFuzzyCandidate(
     }
     keyset.add(key);
 
-    const dist = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
-    if (dist === null) {
+    const res = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
+    if (!res) {
         return;
     }
 
-    const score = 1 - dist / maxDist; // in (0, 1], higher is better
+    const { dist, acceptance } = res;
+    if (dist > acceptance) {
+        return;
+    }
+
+    const score = 1 - dist / acceptance;
+
     const entry = hits.get(candidate.page);
     if (!entry || (!entry.exact && score > entry.score)) {
-        hits.set(candidate.page, { exact: false, score });
+        hits.set(candidate.page, { exact: false, score, seam: candidate.seam });
     }
 }
 
@@ -603,6 +609,54 @@ function sortMatches(hits: Map<number, PageHit>): number[] {
         return [];
     }
 
+    // 1) Collapse adjacent seam pairs: keep the stronger seam and drop the weaker neighbor.
+    //    Rationale: a seam at page p covers boundary (p, p+1). When both seam(p) and seam(p+1)
+    //    exist for the same excerpt, they are competing views of nearly the same cross-page
+    //    region; keeping only the higher-scoring one prevents duplicate, lower-quality
+    //    artifacts (like your page 1 alongside page 2).
+    const pagesAsc = Array.from(hits.keys()).sort((a, b) => a - b);
+    for (let i = 0; i < pagesAsc.length; i++) {
+        const p = pagesAsc[i]!;
+        const hp = hits.get(p);
+        if (!hp || !hp.seam) {
+            continue;
+        }
+
+        const q = p + 1;
+        const hq = hits.get(q);
+        if (!hq || !hq.seam) {
+            continue;
+        }
+
+        // Both are seam hits on adjacent pages: drop the weaker one.
+        if (hq.score > hp.score) {
+            hits.delete(p);
+        } else if (hq.score < hp.score) {
+            hits.delete(q);
+        } else {
+            // Tie: prefer the earlier page (stable reading-order bias).
+            hits.delete(q);
+        }
+    }
+
+    // 2) Remove seam hits that are worse than a non-seam neighbor on the following page.
+    //    If page (p+1) has an exact or stronger non-seam fuzzy match, seam(p) is redundant.
+    for (const [page, hit] of Array.from(hits.entries())) {
+        if (!hit.seam) {
+            continue;
+        }
+
+        const neighbor = hits.get(page + 1);
+        if (!neighbor) {
+            continue;
+        }
+
+        if (neighbor.exact || (!neighbor.seam && neighbor.score >= hit.score)) {
+            hits.delete(page);
+        }
+    }
+
+    // 3) Split and rank: exact first in reading order; then fuzzy by score desc, then page asc.
     const exact: [number, PageHit][] = [];
     const fuzzy: [number, PageHit][] = [];
 
@@ -614,8 +668,8 @@ function sortMatches(hits: Map<number, PageHit>): number[] {
         }
     }
 
-    exact.sort((a, b) => a[0] - b[0]); // reading order
-    fuzzy.sort((a, b) => b[1].score - a[1].score || a[0] - b[0]); // score desc, then page asc
+    exact.sort((a, b) => a[0] - b[0]);
+    fuzzy.sort((a, b) => b[1].score - a[1].score || a[0] - b[0]);
 
     return [...exact, ...fuzzy].map((entry) => entry[0]);
 }
@@ -642,6 +696,11 @@ export function findMatchesAll(pages: string[], excerpts: string[], policy: Matc
 
     const pagesN = pages.map((p) => sanitizeArabic(p, 'aggressive'));
     const excerptsN = excerpts.map((e) => sanitizeArabic(e, 'aggressive'));
+
+    if (policy.log) {
+        policy.log('pagesN', pagesN);
+        policy.log('excerptsN', excerptsN);
+    }
 
     const { patIdToOrigIdxs, patterns } = deduplicateExcerpts(excerptsN);
     const { book, starts: pageStarts } = buildBook(pagesN);

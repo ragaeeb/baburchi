@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { processTextAlignment } from './index';
+import { processTextAlignment } from './typos';
 
 describe('typos', () => {
     describe('processTextAlignment', () => {

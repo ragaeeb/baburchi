@@ -1,4 +1,4 @@
-import { PATTERNS } from './textUtils';
+import { PATTERNS } from './utils/textUtils';
 
 /**
  * Character statistics for analyzing text content and patterns

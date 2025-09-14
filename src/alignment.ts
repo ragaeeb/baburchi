@@ -1,5 +1,5 @@
 import { areSimilarAfterNormalization, calculateSimilarity } from './similarity';
-import { normalizeArabicText } from './textUtils';
+import { normalizeArabicText } from './utils/textUtils';
 
 /**
  * Aligns split text segments to match target lines by finding the best order.

@@ -1,4 +1,4 @@
-import { PATTERNS } from './textUtils';
+import { PATTERNS } from './utils/textUtils';
 
 const INVALID_FOOTNOTE = '()';
 
@@ -164,11 +164,15 @@ const extractReferences = (lines: TextLine[]) => {
  */
 const needsCorrection = (lines: TextLine[], references: ReturnType<typeof extractReferences>) => {
     const mistakenReferences = lines.some((line) => hasInvalidFootnotes(line.text));
-    if (mistakenReferences) return true;
+    if (mistakenReferences) {
+        return true;
+    }
 
     const bodySet = new Set(references.bodyReferences);
     const footnoteSet = new Set(references.footnoteReferences);
-    if (bodySet.size !== footnoteSet.size) return true;
+    if (bodySet.size !== footnoteSet.size) {
+        return true;
+    }
 
     // Check if the sets contain the same elements
     for (const ref of bodySet) {
@@ -246,11 +250,15 @@ export const correctReferences = <T extends TextLine>(lines: T[]): T[] => {
         updatedText = updatedText.replace(/\(\)/g, () => {
             if (line.isFootnote) {
                 const availableRef = bodyRefsForFootnotes.shift();
-                if (availableRef) return availableRef;
+                if (availableRef) {
+                    return availableRef;
+                }
             } else {
                 // It's body text
                 const availableRef = footnoteRefsForBody.shift();
-                if (availableRef) return availableRef;
+                if (availableRef) {
+                    return availableRef;
+                }
             }
 
             // If no available partner reference exists, generate a new one.

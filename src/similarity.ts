@@ -1,4 +1,5 @@
-import { normalizeArabicText } from './textUtils';
+import { calculateLevenshteinDistance } from './utils/leventhein';
+import { normalizeArabicText } from './utils/textUtils';
 
 // Alignment scoring constants
 const ALIGNMENT_SCORES = {
@@ -6,57 +7,6 @@ const ALIGNMENT_SCORES = {
     MISMATCH_PENALTY: -2,
     PERFECT_MATCH: 2,
     SOFT_MATCH: 1,
-};
-
-/**
- * Calculates Levenshtein distance between two strings using space-optimized dynamic programming.
- * The Levenshtein distance is the minimum number of single-character edits (insertions,
- * deletions, or substitutions) required to change one string into another.
- *
- * @param textA - First string to compare
- * @param textB - Second string to compare
- * @returns Minimum edit distance between the two strings
- * @complexity Time: O(m*n), Space: O(min(m,n)) where m,n are string lengths
- * @example
- * calculateLevenshteinDistance('kitten', 'sitting') // Returns 3
- * calculateLevenshteinDistance('', 'hello') // Returns 5
- */
-export const calculateLevenshteinDistance = (textA: string, textB: string): number => {
-    const lengthA = textA.length;
-    const lengthB = textB.length;
-
-    if (lengthA === 0) {
-        return lengthB;
-    }
-
-    if (lengthB === 0) {
-        return lengthA;
-    }
-
-    // Use shorter string for the array to optimize space
-    const [shorter, longer] = lengthA <= lengthB ? [textA, textB] : [textB, textA];
-    const shortLen = shorter.length;
-    const longLen = longer.length;
-
-    let previousRow = Array.from({ length: shortLen + 1 }, (_, index) => index);
-
-    for (let i = 1; i <= longLen; i++) {
-        const currentRow = [i];
-
-        for (let j = 1; j <= shortLen; j++) {
-            const substitutionCost = longer[i - 1] === shorter[j - 1] ? 0 : 1;
-            const minCost = Math.min(
-                previousRow[j] + 1, // deletion
-                currentRow[j - 1] + 1, // insertion
-                previousRow[j - 1] + substitutionCost, // substitution
-            );
-            currentRow.push(minCost);
-        }
-
-        previousRow = currentRow;
-    }
-
-    return previousRow[shortLen];
 };
 
 /**

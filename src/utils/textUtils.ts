@@ -151,8 +151,12 @@ export const handleFootnoteSelection = (tokenA: string, tokenB: string): null | 
     const aHasEmbedded = PATTERNS.footnoteEmbedded.test(tokenA);
     const bHasEmbedded = PATTERNS.footnoteEmbedded.test(tokenB);
 
-    if (aHasEmbedded && !bHasEmbedded) return [tokenA];
-    if (bHasEmbedded && !aHasEmbedded) return [tokenB];
+    if (aHasEmbedded && !bHasEmbedded) {
+        return [tokenA];
+    }
+    if (bHasEmbedded && !aHasEmbedded) {
+        return [tokenB];
+    }
     if (aHasEmbedded && bHasEmbedded) {
         return [tokenA.length <= tokenB.length ? tokenA : tokenB];
     }
@@ -176,8 +180,12 @@ export const handleStandaloneFootnotes = (tokenA: string, tokenB: string): null 
     const aIsFootnote = PATTERNS.footnoteStandalone.test(tokenA);
     const bIsFootnote = PATTERNS.footnoteStandalone.test(tokenB);
 
-    if (aIsFootnote && !bIsFootnote) return [tokenA, tokenB];
-    if (bIsFootnote && !aIsFootnote) return [tokenB, tokenA];
+    if (aIsFootnote && !bIsFootnote) {
+        return [tokenA, tokenB];
+    }
+    if (bIsFootnote && !aIsFootnote) {
+        return [tokenB, tokenA];
+    }
     if (aIsFootnote && bIsFootnote) {
         return [tokenA.length <= tokenB.length ? tokenA : tokenB];
     }

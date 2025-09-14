@@ -5,12 +5,223 @@ import {
     handleFootnoteFusion,
     handleFootnoteSelection,
     handleStandaloneFootnotes,
+    removeFootnoteReferencesSimple,
+    removeSingleDigitFootnoteReferences,
     standardizeHijriSymbol,
     standardizeIntahaSymbol,
     tokenizeText,
 } from './textUtils';
 
 describe('textUtils', () => {
+    describe('removeFootnoteReferencesSimple', () => {
+        it('should remove simple footnote with single Arabic numeral', () => {
+            const input = 'هذا النص (¬٣) يحتوي على حاشية';
+            const expected = 'هذا النص يحتوي على حاشية';
+            expect(removeFootnoteReferencesSimple(input)).toBe(expected);
+        });
+
+        it('should remove footnote with multiple Arabic numerals', () => {
+            const input = 'النص الأول (¬١٢٣) والثاني (¬٤٥٦)';
+            const expected = 'النص الأول والثاني';
+            expect(removeFootnoteReferencesSimple(input)).toBe(expected);
+        });
+
+        it('should handle footnotes with no spaces around them', () => {
+            const input = 'كلمة(¬٧)أخرى';
+            const expected = 'كلمة أخرى';
+            expect(removeFootnoteReferencesSimple(input)).toBe(expected);
+        });
+
+        it('should handle footnotes with multiple spaces around them', () => {
+            const input = 'النص   (¬٩)   هنا';
+            const expected = 'النص هنا';
+            expect(removeFootnoteReferencesSimple(input)).toBe(expected);
+        });
+
+        it('should normalize multiple spaces in text without footnotes', () => {
+            const input = 'هذا    نص    عادي';
+            const expected = 'هذا نص عادي';
+            expect(removeFootnoteReferencesSimple(input)).toBe(expected);
+        });
+
+        it('should handle empty string', () => {
+            expect(removeFootnoteReferencesSimple('')).toBe('');
+        });
+
+        it('should handle text with no footnotes', () => {
+            const input = 'نص عادي بدون حواشي';
+            expect(removeFootnoteReferencesSimple(input)).toBe(input);
+        });
+
+        it('should handle multiple footnotes in sequence', () => {
+            const input = 'النص (¬١) (¬٢) (¬٣) هنا';
+            const expected = 'النص هنا';
+            expect(removeFootnoteReferencesSimple(input)).toBe(expected);
+        });
+
+        it('should handle footnotes at the beginning of text', () => {
+            const input = '(¬٥) هذا نص يبدأ بحاشية';
+            const expected = 'هذا نص يبدأ بحاشية';
+            expect(removeFootnoteReferencesSimple(input)).toBe(expected);
+        });
+
+        it('should handle footnotes at the end of text', () => {
+            const input = 'هذا نص ينتهي بحاشية (¬٨)';
+            const expected = 'هذا نص ينتهي بحاشية';
+            expect(removeFootnoteReferencesSimple(input)).toBe(expected);
+        });
+
+        it('should not remove parentheses without not symbol', () => {
+            const input = 'هذا (نص عادي) في أقواس';
+            expect(removeFootnoteReferencesSimple(input)).toBe(input);
+        });
+
+        it('should handle mixed content with Arabic and English', () => {
+            const input = 'Arabic text (¬٤) and English text';
+            const expected = 'Arabic text and English text';
+            expect(removeFootnoteReferencesSimple(input)).toBe(expected);
+        });
+    });
+
+    describe('removeSingleDigitFootnoteReferences', () => {
+        it('should remove single digit footnote', () => {
+            const input = 'هذا النص (٣) يحتوي على حاشية';
+            const expected = 'هذا النص يحتوي على حاشية';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should remove footnote with م suffix', () => {
+            const input = 'هذا النص (٣ م) يحتوي على حاشية';
+            const expected = 'هذا النص يحتوي على حاشية';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should remove both types of footnotes in same text', () => {
+            const input = 'النص الأول (٣) والثاني (٥ م) هنا';
+            const expected = 'النص الأول والثاني هنا';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should handle all Arabic digits 0-9', () => {
+            const digits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+            digits.forEach((digit) => {
+                const input = `نص (${digit}) هنا`;
+                const expected = 'نص هنا';
+                expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+            });
+        });
+
+        it('should handle all Arabic digits with م suffix', () => {
+            const digits = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+            digits.forEach((digit) => {
+                const input = `نص (${digit} م) هنا`;
+                const expected = 'نص هنا';
+                expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+            });
+        });
+
+        it('should handle footnotes with no spaces around them', () => {
+            const input = 'كلمة(٧)أخرى(٨ م)نهاية';
+            const expected = 'كلمة أخرى نهاية';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should handle footnotes with multiple spaces around them', () => {
+            const input = 'النص   (٩)   والآخر   (٢ م)   هنا';
+            const expected = 'النص والآخر هنا';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should not remove multi-digit numbers', () => {
+            const input = 'هذا النص (١٢) لا يجب حذفه';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(input);
+        });
+
+        it('should normalize multiple spaces', () => {
+            const input = 'هذا    نص    عادي';
+            const expected = 'هذا نص عادي';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should handle empty string', () => {
+            expect(removeSingleDigitFootnoteReferences('')).toBe('');
+        });
+
+        it('should handle text with no footnotes', () => {
+            const input = 'نص عادي بدون حواشي';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(input);
+        });
+
+        it('should handle multiple footnotes in sequence', () => {
+            const input = 'النص (١) (٢ م) (٣) هنا';
+            const expected = 'النص هنا';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should handle footnotes at the beginning of text', () => {
+            const input = '(٥) (٦ م) هذا نص يبدأ بحاشية';
+            const expected = 'هذا نص يبدأ بحاشية';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should handle footnotes at the end of text', () => {
+            const input = 'هذا نص ينتهي بحاشية (٨) (٩ م)';
+            const expected = 'هذا نص ينتهي بحاشية';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should not remove regular parentheses', () => {
+            const input = 'هذا (نص عادي) في أقواس';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(input);
+        });
+
+        it('should handle mixed content with Arabic and English', () => {
+            const input = 'Arabic text (٤) and (٧ م) and (٢ ه) English text';
+            const expected = 'Arabic text and and English text';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should handle different spacing patterns with Arabic letter suffix', () => {
+            const testCases = [
+                { input: '(٣ م)', expected: '' },
+                { input: '(٣  ه)', expected: '' },
+                { input: '(٣   ب)', expected: '' },
+                { input: 'نص (٣ م) هنا', expected: 'نص هنا' },
+            ];
+
+            testCases.forEach(({ input, expected }) => {
+                expect(removeSingleDigitFootnoteReferences(input).trim()).toBe(expected);
+            });
+        });
+
+        it('should preserve text integrity with complex Arabic text', () => {
+            const input = 'قال الإمام أحمد (٣) رحمه الله (٥ م) في هذا الموضوع (٧ ب) المهم';
+            const expected = 'قال الإمام أحمد رحمه الله في هذا الموضوع المهم';
+            expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+        });
+
+        it('should handle various Arabic letters as suffixes', () => {
+            const testCases = [
+                '(٣ أ)',
+                '(٤ إ)',
+                '(٥ آ)',
+                '(٦ ؤ)',
+                '(٧ ئ)',
+                '(٨ ء)',
+                '(٩ ة)',
+                '(٠ ى)',
+                '(١ ي)',
+                '(٢ و)',
+            ];
+
+            testCases.forEach((footnote) => {
+                const input = `نص ${footnote} هنا`;
+                const expected = 'نص هنا';
+                expect(removeSingleDigitFootnoteReferences(input)).toBe(expected);
+            });
+        });
+    });
+
     describe('extractDigits', () => {
         it('should extract Arabic digits', () => {
             const input = '(٥)أخرجه البخاري';

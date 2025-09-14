@@ -106,6 +106,10 @@ describe('sanitize', () => {
             expect(sanitizeArabic('مُحَمَّدٌ', { base: 'none', stripDiacritics: true })).toEqual('محمد');
         });
 
+        it('should remove footnotes', () => {
+            expect(sanitizeArabic('(٣) مُحَمَّدٌ (٣ م)', { base: 'none', stripFootnotes: true })).toEqual('مُحَمَّدٌ');
+        });
+
         it('should simplify the alif with the basic one', () => {
             expect(sanitizeArabic('أإآ', { normalizeAlif: true })).toEqual('ااا');
         });

@@ -32,10 +32,13 @@ export type FixTypoOptions = {
 export type MatchPolicy = {
     /** Try approximate matches for leftovers (default true). */
     enableFuzzy?: boolean;
+
     /** Max absolute edit distance accepted in fuzzy (default 3). */
     maxEditAbs?: number;
+
     /** Max relative edit distance (fraction of excerpt length). Default 0.1 (10%). */
     maxEditRel?: number;
+
     /** q-gram length for candidate generation (default 4). */
     q?: number;
     /** Max rare grams to seed candidates per excerpt (default 5). */
@@ -44,4 +47,9 @@ export type MatchPolicy = {
     maxCandidatesPerExcerpt?: number;
     /** Seam length for bleed windows (default 512). */
     seamLen?: number;
+
+    /**
+     * Optional logging function for debugging.
+     */
+    log?(message?: any, ...optionalParams: any[]): void;
 };

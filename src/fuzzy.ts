@@ -62,7 +62,7 @@ function createSeams(pagesN: string[], seamLen: number): SeamData[] {
         const left = pagesN[p].slice(-seamLen);
         const right = pagesN[p + 1].slice(0, seamLen);
         const text = `${left} ${right}`;
-        seams.push({ text, startPage: p });
+        seams.push({ startPage: p, text });
     }
     return seams;
 }
@@ -122,8 +122,8 @@ function generateCandidates(excerpt: string, qidx: QGramIndex, cfg: Required<Mat
 
             candidates.push({
                 page: p.page,
-                start: Math.max(0, startPos),
                 seam: p.seam,
+                start: Math.max(0, startPos),
             });
 
             if (candidates.length >= cfg.maxCandidatesPerExcerpt) {
@@ -150,31 +150,151 @@ function generateCandidates(excerpt: string, qidx: QGramIndex, cfg: Required<Mat
  * @param maxDist - Maximum edit distance to consider
  * @returns Edit distance if within bounds, null otherwise
  */
+// Tunables (conservative so we don't regress other tests)
+const SEAM_GAP_CEILING = 200; // max chars we are willing to skip at a boundary
+const SEAM_BONUS_CAP = 80; // extra edit distance allowed for cross-page cases
+
 function calculateFuzzyScore(
     excerpt: string,
-    candidate: Candidate,
+    candidate: { page: number; seam: boolean; start: number },
     pagesN: string[],
-    seams: SeamData[],
+    seams: { text: string }[],
     maxDist: number,
 ): number | null {
-    const src = candidate.seam ? seams[candidate.page]?.text : pagesN[candidate.page];
-    if (!src) {
-        return null;
-    }
-
     const L = excerpt.length;
-    const extra = Math.min(maxDist, Math.max(6, Math.ceil(L * 0.12)));
-    const start0 = Math.max(0, candidate.start - Math.floor(extra / 2));
-    const end0 = Math.min(src.length, start0 + L + extra);
 
-    if (end0 <= start0) {
+    // local padding around the candidate; keep your original heuristics
+    const extra = Math.min(maxDist, Math.max(6, Math.ceil(L * 0.12)));
+    const half = Math.floor(extra / 2);
+    const start0 = candidate.start - half;
+
+    // Helper: build a window, extending across page boundaries both forward and backward.
+    const buildWindow = (trimTailEndBy: number = 0, trimHeadStartBy: number = 0): string | null => {
+        if (candidate.seam) {
+            const seam = seams[candidate.page]?.text;
+            if (!seam) {
+                return null;
+            }
+            const s0 = Math.max(0, start0);
+            const desired = L + extra;
+            const end = Math.min(seam.length, s0 + desired);
+            return end > s0 ? seam.slice(s0, end) : null;
+        }
+
+        const p = candidate.page;
+        const base = pagesN[p];
+        if (!base) {
+            return null;
+        }
+
+        const desired = L + extra;
+
+        // Start index within current page
+        let s0 = start0;
+        let window = '';
+
+        // Need to prepend from previous pages?
+        if (s0 < 0) {
+            let needPre = -s0 + trimHeadStartBy; // optionally trim the very start
+            let pp = p - 1;
+            const bits: string[] = [];
+            while (needPre > 0 && pp >= 0) {
+                const src = pagesN[pp];
+                if (!src) {
+                    break;
+                }
+                const take = Math.min(needPre, src.length);
+                const chunk = src.slice(src.length - take);
+                bits.unshift(chunk);
+                needPre -= chunk.length;
+                pp--;
+            }
+            if (bits.length) {
+                window += `${bits.join(' ')} `;
+            }
+            s0 = 0;
+        }
+
+        // Take from current page
+        const end0 = Math.min(base.length - trimTailEndBy, Math.max(0, s0) + desired - window.length);
+        if (end0 > s0) {
+            window += base.slice(Math.max(0, s0), end0);
+        }
+
+        // Append from following pages
+        let remaining = desired - window.length;
+        let pn = p + 1;
+        while (remaining > 0 && pn < pagesN.length) {
+            const src = pagesN[pn];
+            if (!src) {
+                break;
+            }
+            const addition = src.slice(0, remaining);
+            if (!addition.length) {
+                break;
+            }
+            window += ` ${addition}`;
+            remaining = desired - window.length;
+            pn++;
+        }
+
+        return window.length ? window : null;
+    };
+
+    // Primary window (no trimming), plus alternative "gap-squeezed" windows if we cross a boundary
+    const windows: string[] = [];
+    const base = candidate.seam ? seams[candidate.page]?.text : pagesN[candidate.page];
+    if (!base) {
         return null;
     }
 
-    const window = src.slice(start0, end0);
-    const dist = boundedLevenshtein(excerpt, window, maxDist);
+    const desired = L + extra;
+    const crossesEnd = !candidate.seam && start0 + desired > base.length;
+    const crossesStart = !candidate.seam && start0 < 0;
 
-    return dist <= maxDist ? dist : null;
+    const w0 = buildWindow(0, 0);
+    if (w0) {
+        windows.push(w0);
+    }
+
+    // If we spill past the end of the page, try trimming up to SEAM_GAP_CEILING chars from the page tail
+    if (crossesEnd && candidate.page + 1 < pagesN.length) {
+        const cut = Math.min(SEAM_GAP_CEILING, Math.max(0, base.length - Math.max(0, start0)));
+        if (cut > 0) {
+            const wTrimTail = buildWindow(cut, 0);
+            if (wTrimTail) {
+                windows.push(wTrimTail);
+            }
+        }
+    }
+
+    // If we spill before the start of the page, try trimming from the very beginning (head) too
+    if (crossesStart && candidate.page > 0) {
+        const wTrimHead = buildWindow(0, Math.min(SEAM_GAP_CEILING, -start0));
+        if (wTrimHead) {
+            windows.push(wTrimHead);
+        }
+    }
+
+    // Cross-page comparisons get a small extra allowance to absorb boundary junk.
+    const allowance =
+        crossesEnd || crossesStart || candidate.seam
+            ? maxDist + Math.min(SEAM_BONUS_CAP, Math.ceil(L * 0.08))
+            : maxDist;
+
+    let best: number | null = null;
+    for (const w of windows) {
+        const d = boundedLevenshtein(excerpt, w, allowance);
+        if (d != null && (best == null || d < best)) {
+            best = d;
+        }
+    }
+
+    for (const [i, w] of windows.entries()) {
+        console.log?.('window', { allowance, crossesEnd, crossesStart, i, len: w.length });
+    }
+
+    return best;
 }
 
 /**
@@ -200,6 +320,7 @@ function findBestFuzzyMatch(
     }
 
     const maxDist = Math.max(cfg.maxEditAbs, Math.ceil(cfg.maxEditRel * excerpt.length));
+    cfg.log('maxDist', maxDist);
     const keyset = new Set<string>();
     let best: FuzzyMatch | null = null;
 
@@ -210,13 +331,17 @@ function findBestFuzzyMatch(
         }
         keyset.add(key);
 
+        cfg.log('keyset', keyset);
+
         const dist = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
+        cfg.log('dist', dist);
         if (dist === null) {
             continue;
         }
 
         if (!best || dist < best.dist || (dist === best.dist && candidate.page < best.page)) {
-            best = { page: candidate.page, dist };
+            best = { dist, page: candidate.page };
+            cfg.log('findBest best', best);
             if (dist === 0) {
                 break;
             }
@@ -256,16 +381,19 @@ function performFuzzyMatching(
         }
 
         const excerpt = excerptsN[i];
+        cfg.log('excerpt', excerpt);
         if (!excerpt || excerpt.length < cfg.q) {
             continue;
         }
 
         const candidates = generateCandidates(excerpt, qidx, cfg);
+        cfg.log('candidates', candidates);
         if (candidates.length === 0) {
             continue;
         }
 
         const best = findBestFuzzyMatch(excerpt, candidates, pagesN, seams, cfg);
+        cfg.log('best', best);
         if (best) {
             result[i] = best.page;
             seenExact[i] = 1;
@@ -296,13 +424,27 @@ export function findMatches(pages: string[], excerpts: string[], policy: MatchPo
     const pagesN = pages.map((p) => sanitizeArabic(p, 'aggressive'));
     const excerptsN = excerpts.map((e) => sanitizeArabic(e, 'aggressive'));
 
+    if (policy.log) {
+        policy.log('pagesN', pagesN);
+        policy.log('excerptsN', excerptsN);
+    }
+
     const { patIdToOrigIdxs, patterns } = deduplicateExcerpts(excerptsN);
     const { book, starts: pageStarts } = buildBook(pagesN);
 
     const { result, seenExact } = findExactMatches(book, pageStarts, patterns, patIdToOrigIdxs, excerpts.length);
 
+    if (policy.log) {
+        policy.log('findExactMatches result', result);
+        policy.log('seenExact', seenExact);
+    }
+
     if (!seenExact.every((seen) => seen === 1)) {
         performFuzzyMatching(excerptsN, pagesN, seenExact, result, cfg);
+    }
+
+    if (policy.log) {
+        policy.log('performFuzzyMatching result', result);
     }
 
     return Array.from(result);
@@ -336,7 +478,7 @@ function recordExactMatches(
             const hits = hitsByExcerpt[origIdx];
             const prev = hits.get(startPage);
             if (!prev || !prev.exact) {
-                hits.set(startPage, { score: 1, exact: true });
+                hits.set(startPage, { exact: true, score: 1 });
             }
         }
     });
@@ -377,7 +519,7 @@ function processFuzzyCandidate(
     const score = 1 - dist / maxDist; // in (0, 1], higher is better
     const entry = hits.get(candidate.page);
     if (!entry || (!entry.exact && score > entry.score)) {
-        hits.set(candidate.page, { score, exact: false });
+        hits.set(candidate.page, { exact: false, score });
     }
 }
 

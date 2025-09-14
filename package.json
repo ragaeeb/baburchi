@@ -1,29 +1,20 @@
 {
-    "name": "baburchi",
-    "version": "1.6.0",
     "author": "Ragaeeb Haq",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/ragaeeb/baburchi.git"
-    },
-    "main": "dist/index.js",
-    "module": "dist/index.js",
-    "devDependencies": {
-        "@biomejs/biome": "^2.2.4",
-        "@types/bun": "^1.2.21",
-        "@types/node": "^24.4.0",
-        "semantic-release": "^24.2.8",
-        "tsup": "^8.5.0"
-    },
     "bugs": {
         "url": "https://github.com/ragaeeb/baburchi/issues"
     },
     "description": "A lightweight TypeScript library designed to fix typos in OCR post-processing.",
+    "devDependencies": {
+        "@biomejs/biome": "^2.2.4",
+        "@types/bun": "^1.2.22",
+        "@types/node": "^24.4.0",
+        "semantic-release": "^24.2.8",
+        "tsup": "^8.5.0"
+    },
     "engines": {
-        "bun": ">=1.2.21",
+        "bun": ">=1.2.22",
         "node": ">=22.0.0"
     },
-    "sideEffects": false,
     "exports": {
         ".": {
             "import": "./dist/index.js",
@@ -45,11 +36,20 @@
         "typescript"
     ],
     "license": "MIT",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "name": "baburchi",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ragaeeb/baburchi.git"
+    },
     "scripts": {
         "build": "tsup",
         "lint": "biome check ."
     },
+    "sideEffects": false,
     "source": "src/index.ts",
     "type": "module",
-    "types": "dist/index.d.ts"
+    "types": "dist/index.d.ts",
+    "version": "1.7.0"
 }

@@ -152,19 +152,19 @@ export const boundedLevenshtein = (a: string, b: string, maxDist: number): numbe
         return boundedLevenshtein(b, a, maxDist);
     }
 
-    const [prev, curr] = initializeBoundedArrays(b.length);
+    // use `let` so we can swap references instead of copying contents
+    let [prev, curr] = initializeBoundedArrays(b.length);
 
     for (let i = 1; i <= a.length; i++) {
         const rowMin = processBoundedRow(a, b, i, maxDist, prev, curr);
-
         if (rowMin > maxDist) {
             return big;
         }
 
-        // Swap arrays
-        for (let j = 0; j <= b.length; j++) {
-            prev[j] = curr[j];
-        }
+        // O(1) swap instead of O(m) copy
+        const tmp = prev;
+        prev = curr;
+        curr = tmp;
     }
 
     return prev[b.length] <= maxDist ? prev[b.length] : big;

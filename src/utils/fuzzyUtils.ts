@@ -209,7 +209,10 @@ const buildPageWindow = (
 
     // Prepend from previous pages if needed
     if (s0 < 0) {
-        window += buildPreviousPagesContent(pagesN, page, -s0 + trimHeadStartBy);
+        const needFromPrev = Math.max(0, -s0 - trimHeadStartBy);
+        if (needFromPrev > 0) {
+            window += buildPreviousPagesContent(pagesN, page, needFromPrev);
+        }
         s0 = 0;
     }
 
@@ -353,7 +356,7 @@ const findBestMatch = (
 
     for (const w of windows) {
         const d = boundedLevenshtein(excerpt, w, acceptance);
-        if (d != null && (best == null || d < best)) {
+        if (d <= acceptance && (best == null || d < best)) {
             best = d;
         }
     }

@@ -112,11 +112,13 @@ export class QGramIndex {
                 }
             }
         }
-        if (result.length === 0) {
+        if (result.length < gramsPerExcerpt) {
+            const chosen = new Set(result.map((r) => r.gram));
             for (let i = items.length - 1; i >= 0 && result.length < gramsPerExcerpt; i--) {
                 const it = items[i]!;
-                if (this.map.has(it.gram)) {
+                if (this.map.has(it.gram) && !chosen.has(it.gram)) {
                     result.push({ gram: it.gram, offset: it.offset });
+                    chosen.add(it.gram);
                 }
             }
         }

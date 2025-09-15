@@ -514,13 +514,6 @@ function recordFuzzyMatches(
  * @param hits - Map of page hits with quality scores
  * @returns Array of page numbers sorted by match quality
  */
-/**
- * Sorts matches by quality and page order for optimal ranking.
- * Exact matches are prioritized over fuzzy matches, with secondary sorting by page order.
- *
- * @param hits - Map of page hits with quality scores
- * @returns Array of page numbers sorted by match quality
- */
 const sortMatches = (hits: Map<number, PageHit>) => {
     if (hits.size === 0) {
         return [];

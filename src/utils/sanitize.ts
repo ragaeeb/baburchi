@@ -1,3 +1,5 @@
+import { removeFootnoteReferencesSimple, removeSingleDigitFootnoteReferences } from './textUtils';
+
 /**
  * Ultra-fast Arabic text sanitizer for search/indexing/display.
  * Optimized for very high call rates: avoids per-call object spreads and minimizes allocations.
@@ -26,6 +28,9 @@ export type SanitizeOptions = {
 
     /** Remove Arabic diacritics (tashkīl). Default: `true` in `'search'`/`'aggressive'`. */
     stripDiacritics?: boolean;
+
+    /** Remove footnote references. Default: `true` in `'search'`/`'aggressive'`. */
+    stripFootnotes?: boolean;
 
     /**
      * Remove tatweel (ـ).
@@ -74,6 +79,7 @@ type PresetOptions = {
     stripZeroWidth: boolean;
     zeroWidthToSpace: boolean;
     stripDiacritics: boolean;
+    stripFootnotes: boolean;
     stripTatweel: false | 'safe' | 'all';
     normalizeAlif: boolean;
     replaceAlifMaqsurah: boolean;
@@ -245,71 +251,75 @@ const resolveTatweelMode = (
 };
 
 const PRESETS: Record<SanitizePreset, PresetOptions> = {
-    light: {
-        nfc: true,
-        stripZeroWidth: true,
-        zeroWidthToSpace: false,
-        stripDiacritics: false,
-        stripTatweel: false,
-        normalizeAlif: false,
-        replaceAlifMaqsurah: false,
-        replaceTaMarbutahWithHa: false,
-        stripLatinAndSymbols: false,
-        keepOnlyArabicLetters: false,
-        lettersAndSpacesOnly: false,
-        collapseWhitespace: true,
-        trim: true,
-        removeHijriMarker: false,
-    },
-    search: {
-        nfc: true,
-        stripZeroWidth: true,
-        zeroWidthToSpace: false,
-        stripDiacritics: true,
-        stripTatweel: 'all',
-        normalizeAlif: true,
-        replaceAlifMaqsurah: true,
-        replaceTaMarbutahWithHa: false,
-        stripLatinAndSymbols: false,
-        keepOnlyArabicLetters: false,
-        lettersAndSpacesOnly: false,
-        collapseWhitespace: true,
-        trim: true,
-        removeHijriMarker: true,
-    },
     aggressive: {
-        nfc: true,
-        stripZeroWidth: true,
-        zeroWidthToSpace: false,
-        stripDiacritics: true,
-        stripTatweel: 'all',
-        normalizeAlif: true,
-        replaceAlifMaqsurah: true,
-        replaceTaMarbutahWithHa: true,
-        stripLatinAndSymbols: true,
+        collapseWhitespace: true,
         keepOnlyArabicLetters: false,
         lettersAndSpacesOnly: true,
-        collapseWhitespace: true,
-        trim: true,
+        nfc: true,
+        normalizeAlif: true,
         removeHijriMarker: true,
+        replaceAlifMaqsurah: true,
+        replaceTaMarbutahWithHa: true,
+        stripDiacritics: true,
+        stripFootnotes: true,
+        stripLatinAndSymbols: true,
+        stripTatweel: 'all',
+        stripZeroWidth: true,
+        trim: true,
+        zeroWidthToSpace: false,
+    },
+    light: {
+        collapseWhitespace: true,
+        keepOnlyArabicLetters: false,
+        lettersAndSpacesOnly: false,
+        nfc: true,
+        normalizeAlif: false,
+        removeHijriMarker: false,
+        replaceAlifMaqsurah: false,
+        replaceTaMarbutahWithHa: false,
+        stripDiacritics: false,
+        stripFootnotes: false,
+        stripLatinAndSymbols: false,
+        stripTatweel: false,
+        stripZeroWidth: true,
+        trim: true,
+        zeroWidthToSpace: false,
+    },
+    search: {
+        collapseWhitespace: true,
+        keepOnlyArabicLetters: false,
+        lettersAndSpacesOnly: false,
+        nfc: true,
+        normalizeAlif: true,
+        removeHijriMarker: true,
+        replaceAlifMaqsurah: true,
+        replaceTaMarbutahWithHa: false,
+        stripDiacritics: true,
+        stripFootnotes: true,
+        stripLatinAndSymbols: false,
+        stripTatweel: 'all',
+        stripZeroWidth: true,
+        trim: true,
+        zeroWidthToSpace: false,
     },
 } as const;
 
 const PRESET_NONE: PresetOptions = {
-    nfc: false,
-    stripZeroWidth: false,
-    zeroWidthToSpace: false,
-    stripDiacritics: false,
-    stripTatweel: false,
-    normalizeAlif: false,
-    replaceAlifMaqsurah: false,
-    replaceTaMarbutahWithHa: false,
-    stripLatinAndSymbols: false,
+    collapseWhitespace: false,
     keepOnlyArabicLetters: false,
     lettersAndSpacesOnly: false,
-    collapseWhitespace: false,
-    trim: false,
+    nfc: false,
+    normalizeAlif: false,
     removeHijriMarker: false,
+    replaceAlifMaqsurah: false,
+    replaceTaMarbutahWithHa: false,
+    stripDiacritics: false,
+    stripFootnotes: false,
+    stripLatinAndSymbols: false,
+    stripTatweel: false,
+    stripZeroWidth: false,
+    trim: false,
+    zeroWidthToSpace: false,
 };
 
 /**
@@ -351,6 +361,7 @@ export const sanitizeArabic = (input: string, optionsOrPreset: SanitizePreset | 
     const stripZW = resolveBoolean(preset.stripZeroWidth, opts?.stripZeroWidth);
     const zwAsSpace = resolveBoolean(preset.zeroWidthToSpace, opts?.zeroWidthToSpace);
     const removeDia = resolveBoolean(preset.stripDiacritics, opts?.stripDiacritics);
+    const removeFootnotes = resolveBoolean(preset.stripFootnotes, opts?.stripFootnotes);
     const normAlif = resolveBoolean(preset.normalizeAlif, opts?.normalizeAlif);
     const maqToYa = resolveBoolean(preset.replaceAlifMaqsurah, opts?.replaceAlifMaqsurah);
     const taToHa = resolveBoolean(preset.replaceTaMarbutahWithHa, opts?.replaceTaMarbutahWithHa);
@@ -370,6 +381,11 @@ export const sanitizeArabic = (input: string, optionsOrPreset: SanitizePreset | 
     }
     s = removeDiacriticsAndTatweel(s, removeDia, tatweelMode);
     s = applyCharacterMappings(s, normAlif, maqToYa, taToHa);
+
+    if (removeFootnotes) {
+        s = removeFootnoteReferencesSimple(s);
+        s = removeSingleDigitFootnoteReferences(s);
+    }
 
     if (!lettersSpacesOnly) {
         s = removeLatinAndSymbolNoise(s, stripNoise);

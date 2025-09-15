@@ -174,11 +174,54 @@ export const handleStandaloneFootnotes = (tokenA: string, tokenB: string): null 
 };
 
 /**
+ * Removes simple footnote references from Arabic text.
+ * Handles footnotes in the format (¬[Arabic numerals]) where ¬ is the not symbol (U+00AC).
+ *
+ * @param text - The input text containing footnote references to remove
+ * @returns The text with footnote references removed and extra spaces normalized
+ *
+ * @example
+ * ```typescript
+ * removeFootnoteReferencesSimple("هذا النص (¬١٢٣) يحتوي على حاشية")
+ * // Returns: "هذا النص يحتوي على حاشية"
+ * ```
+ */
+export const removeFootnoteReferencesSimple = (text: string): string => {
+    return text
+        .replace(/\s*\(\u00AC[\u0660-\u0669]+\)\s*/g, ' ')
+        .replace(/ +/g, ' ')
+        .trim();
+};
+
+/**
+ * Removes single digit footnote references and extended footnote formats from Arabic text.
+ * Handles footnotes in the format:
+ * - ([single Arabic digit]) - e.g., (٣)
+ * - ([single Arabic digit] [single Arabic letter]) - e.g., (٣ م), (٥ ه), (٧ ب)
+ *
+ * @param text - The input text containing footnote references to remove
+ * @returns The text with footnote references removed and extra spaces normalized
+ *
+ * @example
+ * ```typescript
+ * removeSingleDigitFootnoteReferences("هذا النص (٣) والآخر (٥ م) والثالث (٧ ه) يحتوي على حواشي")
+ * // Returns: "هذا النص والآخر والثالث يحتوي على حواشي"
+ * ```
+ */
+export const removeSingleDigitFootnoteReferences = (text: string): string => {
+    // Remove single digit footnotes with optional Arabic letter suffix: (٣) or (٣ م) or (٥ ه) etc.
+    return text
+        .replace(/\s*\([٠-٩]{1}(\s+[\u0600-\u06FF])?\)\s*/g, ' ')
+        .replace(/ +/g, ' ')
+        .trim();
+};
+
+/**
  * Standardizes standalone Hijri symbol ه to هـ when following Arabic digits
  * @param text - Input text to process
  * @returns Text with standardized Hijri symbols
  */
-export const standardizeHijriSymbol = (text: string): string => {
+export const standardizeHijriSymbol = (text: string) => {
     // Replace standalone ه with هـ when it appears after Arabic digits (0-9 or ٠-٩)
     // Allow any amount of whitespace between the digit and ه, and consider Arabic punctuation as a boundary.
     // Boundary rule: only Arabic letters/digits should block replacement; punctuation should not.

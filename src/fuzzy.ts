@@ -1,8 +1,7 @@
 import type { MatchPolicy } from './types';
 import { buildAhoCorasick } from './utils/ahocorasick';
 import { DEFAULT_POLICY } from './utils/constants';
-import { buildBook, deduplicateExcerpts, findExactMatches, posToPage } from './utils/fuzzyUtils';
-import { boundedLevenshtein } from './utils/levenshthein';
+import { buildBook, calculateFuzzyScore, deduplicateExcerpts, findExactMatches, posToPage } from './utils/fuzzyUtils';
 import { QGramIndex } from './utils/qgram';
 import { sanitizeArabic } from './utils/sanitize';
 
@@ -46,6 +45,8 @@ type PageHit = {
     score: number;
     /** Whether this is an exact match */
     exact: boolean;
+    /** Whether this hit came from a seam candidate */
+    seam: boolean;
 };
 
 /**
@@ -62,7 +63,7 @@ function createSeams(pagesN: string[], seamLen: number): SeamData[] {
         const left = pagesN[p].slice(-seamLen);
         const right = pagesN[p + 1].slice(0, seamLen);
         const text = `${left} ${right}`;
-        seams.push({ text, startPage: p });
+        seams.push({ startPage: p, text });
     }
     return seams;
 }
@@ -106,9 +107,10 @@ function generateCandidates(excerpt: string, qidx: QGramIndex, cfg: Required<Mat
     }
 
     const candidates: Candidate[] = [];
+    const seenKeys = new Set<string>();
     const excerptLen = excerpt.length;
 
-    for (const { gram, offset } of seeds) {
+    outer: for (const { gram, offset } of seeds) {
         const posts = qidx.getPostings(gram);
         if (!posts) {
             continue;
@@ -120,61 +122,22 @@ function generateCandidates(excerpt: string, qidx: QGramIndex, cfg: Required<Mat
                 continue;
             }
 
-            candidates.push({
-                page: p.page,
-                start: Math.max(0, startPos),
-                seam: p.seam,
-            });
+            const start = Math.max(0, startPos);
+            const key = `${p.page}:${start}:${p.seam ? 1 : 0}`;
+            if (seenKeys.has(key)) {
+                continue;
+            }
+
+            candidates.push({ page: p.page, seam: p.seam, start });
+            seenKeys.add(key);
 
             if (candidates.length >= cfg.maxCandidatesPerExcerpt) {
-                break;
+                break outer;
             }
-        }
-
-        if (candidates.length >= cfg.maxCandidatesPerExcerpt) {
-            break;
         }
     }
 
     return candidates;
-}
-
-/**
- * Calculates fuzzy match score for a candidate using bounded Levenshtein distance.
- * Extracts a window around the candidate position and computes edit distance.
- *
- * @param excerpt - Text excerpt to match
- * @param candidate - Candidate position to evaluate
- * @param pagesN - Array of normalized page texts
- * @param seams - Array of seam data
- * @param maxDist - Maximum edit distance to consider
- * @returns Edit distance if within bounds, null otherwise
- */
-function calculateFuzzyScore(
-    excerpt: string,
-    candidate: Candidate,
-    pagesN: string[],
-    seams: SeamData[],
-    maxDist: number,
-): number | null {
-    const src = candidate.seam ? seams[candidate.page]?.text : pagesN[candidate.page];
-    if (!src) {
-        return null;
-    }
-
-    const L = excerpt.length;
-    const extra = Math.min(maxDist, Math.max(6, Math.ceil(L * 0.12)));
-    const start0 = Math.max(0, candidate.start - Math.floor(extra / 2));
-    const end0 = Math.min(src.length, start0 + L + extra);
-
-    if (end0 <= start0) {
-        return null;
-    }
-
-    const window = src.slice(start0, end0);
-    const dist = boundedLevenshtein(excerpt, window, maxDist);
-
-    return dist <= maxDist ? dist : null;
 }
 
 /**
@@ -199,31 +162,101 @@ function findBestFuzzyMatch(
         return null;
     }
 
-    const maxDist = Math.max(cfg.maxEditAbs, Math.ceil(cfg.maxEditRel * excerpt.length));
+    const maxDist = calculateMaxDistance(excerpt, cfg);
+    cfg.log('maxDist', maxDist);
+
     const keyset = new Set<string>();
     let best: FuzzyMatch | null = null;
 
     for (const candidate of candidates) {
-        const key = `${candidate.page}:${candidate.start}:${candidate.seam ? 1 : 0}`;
-        if (keyset.has(key)) {
-            continue;
-        }
-        keyset.add(key);
-
-        const dist = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
-        if (dist === null) {
+        if (shouldSkipCandidate(candidate, keyset)) {
             continue;
         }
 
-        if (!best || dist < best.dist || (dist === best.dist && candidate.page < best.page)) {
-            best = { page: candidate.page, dist };
-            if (dist === 0) {
-                break;
-            }
+        const match = evaluateCandidate(candidate, excerpt, pagesN, seams, maxDist, cfg);
+        if (!match) {
+            continue;
+        }
+
+        best = updateBestMatch(best, match, candidate);
+        cfg.log('findBest best', best);
+
+        if (match.dist === 0) {
+            break;
         }
     }
 
     return best;
+}
+
+/**
+ * Calculates the maximum allowed edit distance
+ */
+function calculateMaxDistance(excerpt: string, cfg: Required<MatchPolicy>): number {
+    return Math.max(cfg.maxEditAbs, Math.ceil(cfg.maxEditRel * excerpt.length));
+}
+
+/**
+ * Checks if a candidate should be skipped (already processed)
+ */
+function shouldSkipCandidate(candidate: Candidate, keyset: Set<string>): boolean {
+    const key = `${candidate.page}:${candidate.start}:${candidate.seam ? 1 : 0}`;
+    if (keyset.has(key)) {
+        return true;
+    }
+    keyset.add(key);
+    return false;
+}
+
+/**
+ * Evaluates a candidate and returns match info if valid
+ */
+function evaluateCandidate(
+    candidate: Candidate,
+    excerpt: string,
+    pagesN: string[],
+    seams: SeamData[],
+    maxDist: number,
+    cfg: Required<MatchPolicy>,
+): { dist: number; acceptance: number } | null {
+    const res = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
+    const dist = res?.dist ?? null;
+    const acceptance = res?.acceptance ?? maxDist;
+
+    cfg.log('dist', dist);
+
+    return isValidMatch(dist, acceptance) ? { acceptance, dist: dist! } : null;
+}
+
+/**
+ * Checks if a match is valid (within acceptance threshold)
+ */
+function isValidMatch(dist: number | null, acceptance: number): boolean {
+    return dist !== null && dist <= acceptance;
+}
+
+/**
+ * Updates the best match if the current match is better
+ */
+function updateBestMatch(
+    current: FuzzyMatch | null,
+    match: { dist: number; acceptance: number },
+    candidate: Candidate,
+): FuzzyMatch {
+    const newMatch = { dist: match.dist, page: candidate.page };
+
+    if (!current) {
+        return newMatch;
+    }
+
+    return isBetterMatch(match.dist, candidate.page, current.dist, current.page) ? newMatch : current;
+}
+
+/**
+ * Determines if a new match is better than the current best
+ */
+function isBetterMatch(newDist: number, newPage: number, bestDist: number, bestPage: number): boolean {
+    return newDist < bestDist || (newDist === bestDist && newPage < bestPage);
 }
 
 /**
@@ -256,16 +289,19 @@ function performFuzzyMatching(
         }
 
         const excerpt = excerptsN[i];
+        cfg.log('excerpt', excerpt);
         if (!excerpt || excerpt.length < cfg.q) {
             continue;
         }
 
         const candidates = generateCandidates(excerpt, qidx, cfg);
+        cfg.log('candidates', candidates);
         if (candidates.length === 0) {
             continue;
         }
 
         const best = findBestFuzzyMatch(excerpt, candidates, pagesN, seams, cfg);
+        cfg.log('best', best);
         if (best) {
             result[i] = best.page;
             seenExact[i] = 1;
@@ -296,13 +332,29 @@ export function findMatches(pages: string[], excerpts: string[], policy: MatchPo
     const pagesN = pages.map((p) => sanitizeArabic(p, 'aggressive'));
     const excerptsN = excerpts.map((e) => sanitizeArabic(e, 'aggressive'));
 
+    if (policy.log) {
+        policy.log('pages', pages);
+        policy.log('excerpts', excerpts);
+        policy.log('pagesN', pagesN);
+        policy.log('excerptsN', excerptsN);
+    }
+
     const { patIdToOrigIdxs, patterns } = deduplicateExcerpts(excerptsN);
     const { book, starts: pageStarts } = buildBook(pagesN);
 
     const { result, seenExact } = findExactMatches(book, pageStarts, patterns, patIdToOrigIdxs, excerpts.length);
 
+    if (policy.log) {
+        policy.log('findExactMatches result', result);
+        policy.log('seenExact', seenExact);
+    }
+
     if (!seenExact.every((seen) => seen === 1)) {
         performFuzzyMatching(excerptsN, pagesN, seenExact, result, cfg);
+    }
+
+    if (policy.log) {
+        policy.log('performFuzzyMatching result', result);
     }
 
     return Array.from(result);
@@ -336,7 +388,7 @@ function recordExactMatches(
             const hits = hitsByExcerpt[origIdx];
             const prev = hits.get(startPage);
             if (!prev || !prev.exact) {
-                hits.set(startPage, { score: 1, exact: true });
+                hits.set(startPage, { exact: true, score: 1, seam: false });
             }
         }
     });
@@ -369,15 +421,21 @@ function processFuzzyCandidate(
     }
     keyset.add(key);
 
-    const dist = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
-    if (dist === null) {
+    const res = calculateFuzzyScore(excerpt, candidate, pagesN, seams, maxDist);
+    if (!res) {
         return;
     }
 
-    const score = 1 - dist / maxDist; // in (0, 1], higher is better
+    const { dist, acceptance } = res;
+    if (dist > acceptance) {
+        return;
+    }
+
+    const score = 1 - dist / acceptance;
+
     const entry = hits.get(candidate.page);
     if (!entry || (!entry.exact && score > entry.score)) {
-        hits.set(candidate.page, { score, exact: false });
+        hits.set(candidate.page, { exact: false, score, seam: candidate.seam });
     }
 }
 
@@ -456,11 +514,90 @@ function recordFuzzyMatches(
  * @param hits - Map of page hits with quality scores
  * @returns Array of page numbers sorted by match quality
  */
-function sortMatches(hits: Map<number, PageHit>): number[] {
+const sortMatches = (hits: Map<number, PageHit>) => {
     if (hits.size === 0) {
         return [];
     }
 
+    // 1) Collapse adjacent seam pairs: keep the stronger seam and drop the weaker neighbor.
+    collapseAdjacentSeams(hits);
+
+    // 2) Remove seam hits that are worse than a non-seam neighbor on the following page.
+    removeWeakSeams(hits);
+
+    // 3) Split and rank: exact first in reading order; then fuzzy by score desc, then page asc.
+    return rankHits(hits);
+};
+
+/**
+ * Removes weaker seam from adjacent seam pairs
+ */
+const collapseAdjacentSeams = (hits: Map<number, PageHit>) => {
+    const pagesAsc = Array.from(hits.keys()).sort((a, b) => a - b);
+
+    for (const page of pagesAsc) {
+        const currentHit = hits.get(page);
+        const nextHit = hits.get(page + 1);
+
+        if (shouldCollapseSeams(currentHit, nextHit)) {
+            const pageToRemove = selectWeakerSeam(page, currentHit!, nextHit!);
+            hits.delete(pageToRemove);
+        }
+    }
+};
+
+/**
+ * Checks if two hits are adjacent seams that should be collapsed
+ */
+const shouldCollapseSeams = (hit1?: PageHit, hit2?: PageHit): boolean => {
+    return Boolean(hit1?.seam && hit2?.seam);
+};
+
+/**
+ * Returns the page number of the weaker seam (or later page if tied)
+ */
+const selectWeakerSeam = (page1: number, hit1: PageHit, hit2: PageHit): number => {
+    if (hit2.score > hit1.score) {
+        return page1;
+    }
+    if (hit2.score < hit1.score) {
+        return page1 + 1;
+    }
+    return page1 + 1; // Tie: prefer earlier page
+};
+
+/**
+ * Removes seam hits that are redundant compared to stronger neighbors
+ */
+const removeWeakSeams = (hits: Map<number, PageHit>) => {
+    const seamPages = Array.from(hits.entries())
+        .filter(([, hit]) => hit.seam)
+        .map(([page]) => page);
+
+    for (const page of seamPages) {
+        const seamHit = hits.get(page)!;
+        const neighbor = hits.get(page + 1);
+
+        if (isSeamRedundant(seamHit, neighbor)) {
+            hits.delete(page);
+        }
+    }
+};
+
+/**
+ * Checks if a seam hit is redundant compared to its neighbor
+ */
+const isSeamRedundant = (seamHit: PageHit, neighbor?: PageHit): boolean => {
+    if (!neighbor) {
+        return false;
+    }
+    return neighbor.exact || (!neighbor.seam && neighbor.score >= seamHit.score);
+};
+
+/**
+ * Splits hits into exact and fuzzy, then sorts and combines them
+ */
+const rankHits = (hits: Map<number, PageHit>): number[] => {
     const exact: [number, PageHit][] = [];
     const fuzzy: [number, PageHit][] = [];
 
@@ -472,11 +609,11 @@ function sortMatches(hits: Map<number, PageHit>): number[] {
         }
     }
 
-    exact.sort((a, b) => a[0] - b[0]); // reading order
-    fuzzy.sort((a, b) => b[1].score - a[1].score || a[0] - b[0]); // score desc, then page asc
+    exact.sort((a, b) => a[0] - b[0]);
+    fuzzy.sort((a, b) => b[1].score - a[1].score || a[0] - b[0]);
 
     return [...exact, ...fuzzy].map((entry) => entry[0]);
-}
+};
 
 /**
  * Main function to find all matches per excerpt, ranked by quality.
@@ -500,6 +637,13 @@ export function findMatchesAll(pages: string[], excerpts: string[], policy: Matc
 
     const pagesN = pages.map((p) => sanitizeArabic(p, 'aggressive'));
     const excerptsN = excerpts.map((e) => sanitizeArabic(e, 'aggressive'));
+
+    if (policy.log) {
+        policy.log('pages', pages);
+        policy.log('excerpts', excerpts);
+        policy.log('pagesN', pagesN);
+        policy.log('excerptsN', excerptsN);
+    }
 
     const { patIdToOrigIdxs, patterns } = deduplicateExcerpts(excerptsN);
     const { book, starts: pageStarts } = buildBook(pagesN);

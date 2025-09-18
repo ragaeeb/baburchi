@@ -328,5 +328,39 @@ describe('footnotes', () => {
                 },
             ]);
         });
+
+        it('should reuse extra body references when multiple placeholders exist in footnotes', () => {
+            const lines = [
+                { text: 'Body (١) again (١) and (٢)' },
+                { isFootnote: true, text: '(١) First footnote' },
+                { isFootnote: true, text: '() Missing match A' },
+                { isFootnote: true, text: '() Missing match B' },
+            ];
+
+            const actual = correctReferences(lines as any) as any;
+
+            expect(actual).toEqual([
+                { text: 'Body (١) again (١) and (٢)' },
+                { isFootnote: true, text: '(١) First footnote' },
+                { isFootnote: true, text: '(١) Missing match A' },
+                { isFootnote: true, text: '(٢) Missing match B' },
+            ]);
+        });
+
+        it('should use surplus footnote references when body contains placeholders', () => {
+            const lines = [
+                { text: 'Body with () placeholder' },
+                { isFootnote: true, text: '(١) First footnote' },
+                { isFootnote: true, text: '(٢) Extra footnote' },
+            ];
+
+            const actual = correctReferences(lines as any) as any;
+
+            expect(actual).toEqual([
+                { text: 'Body with (١) placeholder' },
+                { isFootnote: true, text: '(١) First footnote' },
+                { isFootnote: true, text: '(٢) Extra footnote' },
+            ]);
+        });
     });
 });

@@ -1,6 +1,6 @@
 import type { FixTypoOptions } from './types';
 import { sanitizeArabic } from './utils/sanitize';
-import { alignTokenSequences, areSimilarAfterNormalization, calculateSimilarity } from './utils/similarity';
+import { alignTokenSequences, areSimilarAfterNormalization, isSimilarityAboveThreshold } from './utils/similarity';
 import {
     handleFootnoteFusion,
     handleFootnoteSelection,
@@ -57,9 +57,9 @@ const selectBestTokens = (
     // Choose based on similarity
     const normalizedOriginal = sanitizeArabic(originalToken);
     const normalizedAlt = sanitizeArabic(altToken);
-    const similarity = calculateSimilarity(normalizedOriginal, normalizedAlt);
+    const preferOriginal = isSimilarityAboveThreshold(normalizedOriginal, normalizedAlt, similarityThreshold);
 
-    return [similarity > similarityThreshold ? originalToken : altToken];
+    return [preferOriginal ? originalToken : altToken];
 };
 
 /**

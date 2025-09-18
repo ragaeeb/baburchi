@@ -1,4 +1,4 @@
-import { calculateLevenshteinDistance } from './levenshthein';
+import { boundedLevenshtein, calculateLevenshteinDistance } from './levenshthein';
 import { sanitizeArabic } from './sanitize';
 
 // Alignment scoring constants
@@ -27,6 +27,51 @@ export const calculateSimilarity = (textA: string, textB: string): number => {
     return (maxLength - distance) / maxLength;
 };
 
+const EPSILON = 1e-9;
+
+const computeMaxDistance = (length: number, threshold: number, inclusive: boolean): number => {
+    if (threshold >= 1) {
+        return inclusive && threshold === 1 ? 0 : -1;
+    }
+
+    const allowed = (1 - threshold) * length;
+
+    if (inclusive) {
+        return Math.floor(allowed + EPSILON);
+    }
+
+    if (allowed <= 0) {
+        return -1;
+    }
+
+    if (allowed <= EPSILON) {
+        return 0;
+    }
+
+    return Math.ceil(allowed - EPSILON) - 1;
+};
+
+export const isSimilarityAboveThreshold = (
+    textA: string,
+    textB: string,
+    threshold: number,
+    inclusive: boolean = false,
+): boolean => {
+    const maxLength = Math.max(textA.length, textB.length);
+
+    if (maxLength === 0) {
+        return inclusive ? threshold <= 1 : threshold < 1;
+    }
+
+    const maxDistance = computeMaxDistance(maxLength, threshold, inclusive);
+    if (maxDistance < 0) {
+        return false;
+    }
+
+    const distance = boundedLevenshtein(textA, textB, maxDistance);
+    return distance <= maxDistance;
+};
+
 /**
  * Checks if two texts are similar after Arabic normalization.
  * Normalizes both texts by removing diacritics and decorative elements,
@@ -42,7 +87,7 @@ export const calculateSimilarity = (textA: string, textB: string): number => {
 export const areSimilarAfterNormalization = (textA: string, textB: string, threshold: number = 0.6): boolean => {
     const normalizedA = sanitizeArabic(textA);
     const normalizedB = sanitizeArabic(textB);
-    return calculateSimilarity(normalizedA, normalizedB) >= threshold;
+    return isSimilarityAboveThreshold(normalizedA, normalizedB, threshold, true);
 };
 
 /**
@@ -73,7 +118,7 @@ export const calculateAlignmentScore = (
     }
 
     const isTypoSymbol = typoSymbols.includes(tokenA) || typoSymbols.includes(tokenB);
-    const isHighlySimilar = calculateSimilarity(normalizedA, normalizedB) >= similarityThreshold;
+    const isHighlySimilar = isSimilarityAboveThreshold(normalizedA, normalizedB, similarityThreshold, true);
 
     return isTypoSymbol || isHighlySimilar ? ALIGNMENT_SCORES.SOFT_MATCH : ALIGNMENT_SCORES.MISMATCH_PENALTY;
 };

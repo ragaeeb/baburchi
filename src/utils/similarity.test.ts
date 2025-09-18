@@ -5,6 +5,7 @@ import {
     areSimilarAfterNormalization,
     calculateAlignmentScore,
     calculateSimilarity,
+    isSimilarityAboveThreshold,
 } from './similarity';
 
 describe('similarity', () => {
@@ -37,6 +38,20 @@ describe('similarity', () => {
         it('should work with Arabic text', () => {
             const similarity = calculateSimilarity('السلام', 'السلم');
             expect(similarity).toBeGreaterThan(0.8);
+        });
+    });
+
+    describe('isSimilarityAboveThreshold', () => {
+        it('should return true when similarity strictly exceeds the threshold', () => {
+            expect(isSimilarityAboveThreshold('hello', 'helo', 0.7)).toBe(true);
+        });
+
+        it('should return false when similarity only meets the threshold in strict mode', () => {
+            expect(isSimilarityAboveThreshold('hello', 'helo', 0.8)).toBe(false);
+        });
+
+        it('should return true for inclusive comparisons when similarity equals the threshold', () => {
+            expect(isSimilarityAboveThreshold('hello', 'helo', 0.8, true)).toBe(true);
         });
     });
 

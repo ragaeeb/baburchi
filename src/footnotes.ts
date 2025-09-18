@@ -1,3 +1,5 @@
+import { buildAhoCorasick } from './utils/ahocorasick';
+import { buildBook, posToPage } from './utils/fuzzyUtils';
 import { PATTERNS } from './utils/textUtils';
 
 const INVALID_FOOTNOTE = '()';
@@ -98,85 +100,112 @@ type TextLine = {
 };
 
 /**
- * Extracts all footnote references from text lines, categorizing them by type and location.
- * Handles both Arabic-Indic numerals and OCR-confused characters in body text and footnotes.
+ * Normalizes OCR-confused numerals inside reference markers to their Arabic equivalents.
+ * This pass preserves all other text while ensuring subsequent matching operates on
+ * consistent reference strings.
  *
  * @param lines - Array of text line objects with optional isFootnote flag
- * @returns Object containing categorized reference arrays:
- *   - bodyReferences: All valid references found in body text
- *   - footnoteReferences: All valid references found in footnotes
- *   - ocrConfusedInBody: OCR-confused references in body text (for tracking)
- *   - ocrConfusedInFootnotes: OCR-confused references in footnotes (for tracking)
+ * @returns A new array of lines with OCR digits converted inside parentheses
  * @example
  * const lines = [
- *   { text: 'Body with (١) and (O)', isFootnote: false },
- *   { text: '(١) Footnote text', isFootnote: true }
+ *   { text: 'Body with (O)', isFootnote: false },
+ *   { text: '(1) Footnote text', isFootnote: true }
  * ];
- * const refs = extractReferences(lines);
- * // refs.bodyReferences contains ['(١)', '(٥)'] - OCR 'O' converted to '٥'
+ * const sanitized = sanitizeReferenceMarkers(lines);
+ * // sanitized[0].text === 'Body with (٥)'
+ * // sanitized[1].text === '(١) Footnote text'
  */
-const extractReferences = (lines: TextLine[]) => {
-    const arabicReferencesInBody = lines
-        .filter((b) => !b.isFootnote)
-        .flatMap((b) => b.text.match(PATTERNS.arabicReferenceRegex) || []);
+const sanitizeReferenceMarkers = <T extends TextLine>(lines: T[]): T[] => {
+    return lines.map((line) => {
+        const updatedText = line.text.replace(/\([.1OV9]+\)/g, (match) => {
+            return match.replace(/[.1OV9]/g, (char) => ocrToArabic(char));
+        });
+        return { ...line, text: updatedText };
+    });
+};
 
-    const ocrConfusedReferencesInBody = lines
-        .filter((b) => !b.isFootnote)
-        .flatMap((b) => b.text.match(PATTERNS.ocrConfusedReferenceRegex) || []);
+type ReferenceData = {
+    bodyCounts: Map<string, number>;
+    footnoteCounts: Map<string, number>;
+    hasInvalidPlaceholders: boolean;
+    maxReferenceNumber: number;
+    orderedBodyRefs: string[];
+    orderedFootnoteRefs: string[];
+};
 
-    const arabicReferencesInFootnotes = lines
-        .filter((b) => b.isFootnote)
-        .flatMap((b) => b.text.match(PATTERNS.arabicFootnoteReferenceRegex) || []);
+const collectReferenceData = <T extends TextLine>(lines: T[]): ReferenceData => {
+    const orderedBodyRefs: string[] = [];
+    const orderedFootnoteRefs: string[] = [];
+    const uniqueRefs = new Set<string>();
 
-    const ocrConfusedReferencesInFootnotes = lines
-        .filter((b) => b.isFootnote)
-        .flatMap((b) => b.text.match(PATTERNS.ocrConfusedFootnoteReferenceRegex) || []);
+    for (const line of lines) {
+        const matches = line.text.match(PATTERNS.arabicReferenceRegex) || [];
+        if (matches.length === 0) {
+            continue;
+        }
 
-    const convertedOcrBodyRefs = ocrConfusedReferencesInBody.map((ref) =>
-        ref.replace(/[.1OV9]/g, (char) => ocrToArabic(char)),
-    );
+        if (line.isFootnote) {
+            orderedFootnoteRefs.push(...matches);
+        } else {
+            orderedBodyRefs.push(...matches);
+        }
 
-    const convertedOcrFootnoteRefs = ocrConfusedReferencesInFootnotes.map((ref) =>
-        ref.replace(/[.1OV9]/g, (char) => ocrToArabic(char)),
-    );
+        for (const ref of matches) {
+            uniqueRefs.add(ref);
+        }
+    }
+
+    const patterns = [INVALID_FOOTNOTE, ...uniqueRefs];
+    const { book, starts } = buildBook(lines.map((line) => line.text));
+    const ac = buildAhoCorasick(patterns);
+
+    const bodyCounts = new Map<string, number>();
+    const footnoteCounts = new Map<string, number>();
+    let hasInvalidPlaceholders = false;
+
+    ac.find(book, (pid, endPos) => {
+        const ref = patterns[pid]!;
+        const startPos = endPos - ref.length;
+        const pageIndex = posToPage(startPos, starts);
+        const line = lines[pageIndex];
+        if (!line) {
+            return;
+        }
+
+        if (ref === INVALID_FOOTNOTE) {
+            hasInvalidPlaceholders = true;
+            return;
+        }
+
+        const target = line.isFootnote ? footnoteCounts : bodyCounts;
+        target.set(ref, (target.get(ref) ?? 0) + 1);
+    });
+
+    let maxReferenceNumber = 0;
+    for (const ref of uniqueRefs) {
+        maxReferenceNumber = Math.max(maxReferenceNumber, arabicToNumber(ref));
+    }
 
     return {
-        bodyReferences: [...arabicReferencesInBody, ...convertedOcrBodyRefs],
-        footnoteReferences: [...arabicReferencesInFootnotes, ...convertedOcrFootnoteRefs],
-        ocrConfusedInBody: ocrConfusedReferencesInBody,
-        ocrConfusedInFootnotes: ocrConfusedReferencesInFootnotes,
+        bodyCounts,
+        footnoteCounts,
+        hasInvalidPlaceholders,
+        maxReferenceNumber,
+        orderedBodyRefs,
+        orderedFootnoteRefs,
     };
 };
 
-/**
- * Determines if footnote reference correction is needed by checking for:
- * 1. Invalid footnote patterns (empty parentheses, OCR mistakes)
- * 2. Mismatched sets of references between body text and footnotes
- * 3. Different counts of references in body vs footnotes
- *
- * @param lines - Array of text line objects to analyze
- * @param references - Extracted reference data from extractReferences()
- * @returns True if correction is needed, false if references are already correct
- * @example
- * const lines = [{ text: 'Text with ()', isFootnote: false }];
- * const refs = extractReferences(lines);
- * needsCorrection(lines, refs) // Returns true due to invalid "()" reference
- */
-const needsCorrection = (lines: TextLine[], references: ReturnType<typeof extractReferences>) => {
+const needsCorrection = (lines: TextLine[], data: ReferenceData) => {
     const mistakenReferences = lines.some((line) => hasInvalidFootnotes(line.text));
-    if (mistakenReferences) {
+    if (mistakenReferences || data.hasInvalidPlaceholders) {
         return true;
     }
 
-    const bodySet = new Set(references.bodyReferences);
-    const footnoteSet = new Set(references.footnoteReferences);
-    if (bodySet.size !== footnoteSet.size) {
-        return true;
-    }
+    const refs = new Set<string>([...data.bodyCounts.keys(), ...data.footnoteCounts.keys()]);
 
-    // Check if the sets contain the same elements
-    for (const ref of bodySet) {
-        if (!footnoteSet.has(ref)) {
+    for (const ref of refs) {
+        if ((data.bodyCounts.get(ref) ?? 0) !== (data.footnoteCounts.get(ref) ?? 0)) {
             return true;
         }
     }
@@ -184,84 +213,72 @@ const needsCorrection = (lines: TextLine[], references: ReturnType<typeof extrac
     return false;
 };
 
-/**
- * Corrects footnote references in an array of text lines by:
- * 1. Converting OCR-confused characters to proper Arabic numerals
- * 2. Filling in empty "()" references with appropriate numbers
- * 3. Ensuring footnote references in body text match those in footnotes
- * 4. Generating new reference numbers when needed
- *
- * @param lines - Array of text line objects, each with optional isFootnote flag
- * @returns Array of corrected text lines with proper footnote references
- * @example
- * const lines = [
- *   { text: 'Main text with ()', isFootnote: false },
- *   { text: '() This is a footnote', isFootnote: true }
- * ];
- * const corrected = correctReferences(lines);
- * // Returns lines with "()" replaced by proper Arabic numerals like "(١)"
- */
-export const correctReferences = <T extends TextLine>(lines: T[]): T[] => {
-    const initialReferences = extractReferences(lines);
+const buildReferenceQueue = (
+    orderedRefs: string[],
+    source: Map<string, number>,
+    target: Map<string, number>,
+): string[] => {
+    const queue: string[] = [];
+    const seen = new Set<string>();
 
-    if (!needsCorrection(lines, initialReferences)) {
+    for (const ref of orderedRefs) {
+        if (seen.has(ref)) {
+            continue;
+        }
+        seen.add(ref);
+
+        const diff = (source.get(ref) ?? 0) - (target.get(ref) ?? 0);
+        for (let i = 0; i < diff; i++) {
+            queue.push(ref);
+        }
+    }
+
+    return queue;
+};
+
+export const correctReferences = <T extends TextLine>(lines: T[]): T[] => {
+    if (lines.length === 0) {
         return lines;
     }
 
-    // Pass 1: Sanitize lines by correcting only OCR characters inside reference markers.
-    const sanitizedLines = lines.map((line) => {
-        let updatedText = line.text;
-        // This regex finds the full reference, e.g., "(O)" or "(1)"
-        const ocrRegex = /\([.1OV9]+\)/g;
-        updatedText = updatedText.replace(ocrRegex, (match) => {
-            // This replace acts *inside* the found match, e.g., on "O" or "1"
-            return match.replace(/[.1OV9]/g, (char) => ocrToArabic(char));
-        });
-        return { ...line, text: updatedText };
-    });
+    const sanitizedLines = sanitizeReferenceMarkers(lines);
+    const referenceData = collectReferenceData(sanitizedLines);
 
-    // Pass 2: Analyze the sanitized lines to get a clear and accurate picture of references.
-    const cleanReferences = extractReferences(sanitizedLines);
+    if (!needsCorrection(lines, referenceData)) {
+        return lines;
+    }
 
-    // Step 3: Create queues of "unmatched" references for two-way pairing.
-    const bodyRefSet = new Set(cleanReferences.bodyReferences);
-    const footnoteRefSet = new Set(cleanReferences.footnoteReferences);
+    const bodyRefsForFootnotes = buildReferenceQueue(
+        [...new Set(referenceData.orderedBodyRefs)],
+        referenceData.bodyCounts,
+        referenceData.footnoteCounts,
+    );
+    const footnoteRefsForBody = buildReferenceQueue(
+        [...new Set(referenceData.orderedFootnoteRefs)],
+        referenceData.footnoteCounts,
+        referenceData.bodyCounts,
+    );
 
-    const uniqueBodyRefs = [...new Set(cleanReferences.bodyReferences)];
-    const uniqueFootnoteRefs = [...new Set(cleanReferences.footnoteReferences)];
+    const referenceCounter = { count: referenceData.maxReferenceNumber + 1 };
 
-    // Queue 1: Body references available for footnotes.
-    const bodyRefsForFootnotes = uniqueBodyRefs.filter((ref) => !footnoteRefSet.has(ref));
-    // Queue 2: Footnote references available for the body.
-    const footnoteRefsForBody = uniqueFootnoteRefs.filter((ref) => !bodyRefSet.has(ref));
-
-    // Step 4: Determine the starting point for any completely new reference numbers.
-    const allRefs = [...bodyRefSet, ...footnoteRefSet];
-    const maxRefNum = allRefs.length > 0 ? Math.max(0, ...allRefs.map((ref) => arabicToNumber(ref))) : 0;
-    const referenceCounter = { count: maxRefNum + 1 };
-
-    // Step 5: Map over the sanitized lines, filling in '()' using the queues.
     return sanitizedLines.map((line) => {
         if (!line.text.includes(INVALID_FOOTNOTE)) {
             return line;
         }
-        let updatedText = line.text;
 
-        updatedText = updatedText.replace(/\(\)/g, () => {
+        const updatedText = line.text.replace(/\(\)/g, () => {
             if (line.isFootnote) {
                 const availableRef = bodyRefsForFootnotes.shift();
                 if (availableRef) {
                     return availableRef;
                 }
             } else {
-                // It's body text
                 const availableRef = footnoteRefsForBody.shift();
                 if (availableRef) {
                     return availableRef;
                 }
             }
 
-            // If no available partner reference exists, generate a new one.
             const newRef = `(${numberToArabic(referenceCounter.count)})`;
             referenceCounter.count++;
             return newRef;

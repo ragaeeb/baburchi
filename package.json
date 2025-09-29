@@ -6,13 +6,13 @@
     "description": "A lightweight TypeScript library designed to fix typos in OCR post-processing.",
     "devDependencies": {
         "@biomejs/biome": "^2.2.4",
-        "@types/bun": "^1.2.22",
-        "@types/node": "^24.4.0",
-        "semantic-release": "^24.2.8",
+        "@types/bun": "^1.2.23",
+        "@types/node": "^24.5.2",
+        "semantic-release": "^24.2.9",
         "tsup": "^8.5.0"
     },
     "engines": {
-        "bun": ">=1.2.22",
+        "bun": ">=1.2.23",
         "node": ">=22.0.0"
     },
     "exports": {
@@ -51,5 +51,5 @@
     "source": "src/index.ts",
     "type": "module",
     "types": "dist/index.d.ts",
-    "version": "1.7.0"
+    "version": "1.7.1"
 }

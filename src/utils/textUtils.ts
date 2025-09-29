@@ -188,7 +188,7 @@ export const handleStandaloneFootnotes = (tokenA: string, tokenB: string): null 
  */
 export const removeFootnoteReferencesSimple = (text: string): string => {
     return text
-        .replace(/\s*\(\u00AC[\u0660-\u0669]+\)\s*/g, ' ')
+        .replace(/ ?\(\u00AC[\u0660-\u0669]+\) ?/g, ' ')
         .replace(/ +/g, ' ')
         .trim();
 };
@@ -211,7 +211,7 @@ export const removeFootnoteReferencesSimple = (text: string): string => {
 export const removeSingleDigitFootnoteReferences = (text: string): string => {
     // Remove single digit footnotes with optional Arabic letter suffix: (٣) or (٣ م) or (٥ ه) etc.
     return text
-        .replace(/\s*\([٠-٩]{1}(\s+[\u0600-\u06FF])?\)\s*/g, ' ')
+        .replace(/ ?\([٠-٩]{1}(\s+[\u0600-\u06FF])?\) ?/g, ' ')
         .replace(/ +/g, ' ')
         .trim();
 };

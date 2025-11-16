@@ -137,6 +137,14 @@ export const processTextAlignment = (originalText: string, altText: string, opti
     return finalTokens.join(' ');
 };
 
+/**
+ * Convenience wrapper around {@link processTextAlignment} that accepts partial options.
+ *
+ * @param original - The source text that may contain typographical errors.
+ * @param correction - The reference text used to correct the {@link original} text.
+ * @param options - Partial typo correction options combined with required typo symbols.
+ * @returns The corrected text generated from the alignment process.
+ */
 export const fixTypo = (
     original: string,
     correction: string,

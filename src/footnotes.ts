@@ -89,7 +89,7 @@ const arabicToNumber = (arabicStr: string): number => {
         numStr += lookup[char];
     }
     const parsed = parseInt(numStr, 10);
-    return isNaN(parsed) ? 0 : parsed;
+    return Number.isNaN(parsed) ? 0 : parsed;
 };
 
 type TextLine = {

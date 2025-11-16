@@ -104,18 +104,27 @@ const RX_NON_ARABIC_LETTERS = /[^\u0621-\u063A\u0641-\u064A\u0671\u067E\u0686\u0
 const RX_NOT_LETTERS_OR_SPACE = /[^\u0621-\u063A\u0641-\u064A\u0671\u067E\u0686\u06A4-\u06AF\u06CC\u06D2\u06D3\s]/g;
 
 /**
- * Returns `true` if the code point is ASCII space.
+ * Checks whether a code point represents the ASCII space character.
+ *
+ * @param code - The numeric code point to evaluate.
+ * @returns True when the code point is the ASCII space character.
  */
 const isAsciiSpace = (code: number): boolean => code === 32;
 
 /**
- * Returns `true` if the code point is a Western digit or Arabic-Indic digit.
+ * Checks whether a code point represents a Western or Arabic-Indic digit.
+ *
+ * @param code - The numeric code point to evaluate.
+ * @returns True when the code point is a digit in either numeral system.
  */
 const isDigitCodePoint = (code: number): boolean => (code >= 48 && code <= 57) || (code >= 0x0660 && code <= 0x0669);
 
 /**
  * Removes tatweel while preserving a tatweel that immediately follows a digit or 'ه'.
  * This protects list markers and Hijri date forms.
+ *
+ * @param s - The string to sanitize.
+ * @returns The sanitized string with only safe tatweel removed.
  */
 const removeTatweelSafely = (s: string): string =>
     s.replace(RX_TATWEEL, (_m, i: number, str: string) => {
@@ -134,23 +143,40 @@ const removeTatweelSafely = (s: string): string =>
 
 /**
  * Removes the Hijri date marker when it immediately follows a date-like token.
+ *
+ * @param s - The string to sanitize.
+ * @returns The string without redundant Hijri markers.
  */
 const removeHijriDateMarker = (s: string): string =>
     s.replace(/([0-9\u0660-\u0669][0-9\u0660-\u0669/\-\s]*?)\s*ه(?:ـ)?(?=(?:\s|$|[^\p{L}\p{N}]))/gu, '$1');
 
 /**
  * Applies NFC normalization if available and requested.
+ *
+ * @param s - The string to normalize.
+ * @param enable - Flag indicating whether normalization should be applied.
+ * @returns The normalized string when enabled; otherwise the original string.
  */
 const applyNfcNormalization = (s: string, enable: boolean): string => (enable && s.normalize ? s.normalize('NFC') : s);
 
 /**
  * Removes zero-width controls, optionally replacing them with spaces.
+ *
+ * @param s - The input string to process.
+ * @param enable - Whether zero-width characters should be removed.
+ * @param asSpace - When true, replaces zero-width characters with spaces instead of deleting them.
+ * @returns The updated string with zero-width characters handled.
  */
 const removeZeroWidthControls = (s: string, enable: boolean, asSpace: boolean): string =>
     enable ? s.replace(RX_ZERO_WIDTH, asSpace ? ' ' : '') : s;
 
 /**
  * Removes diacritics and tatweel according to the selected mode.
+ *
+ * @param s - The string to sanitize.
+ * @param removeDiacritics - Whether diacritics should be stripped.
+ * @param tatweelMode - Mode describing how tatweel characters should be handled.
+ * @returns The sanitized string after diacritic and tatweel processing.
  */
 const removeDiacriticsAndTatweel = (
     s: string,
@@ -171,6 +197,12 @@ const removeDiacriticsAndTatweel = (
 
 /**
  * Applies canonical character mappings: Alif variants, alif maqṣūrah, tāʾ marbūṭa.
+ *
+ * @param s - The string to normalize.
+ * @param normalizeAlif - Whether to normalize different Alif forms to bare Alif.
+ * @param maqsurahToYa - Whether to convert alif maqṣūrah to yāʾ.
+ * @param taMarbutahToHa - Whether to convert tāʾ marbūṭa to hāʾ.
+ * @returns The string after applying character mappings.
  */
 const applyCharacterMappings = (
     s: string,
@@ -192,6 +224,10 @@ const applyCharacterMappings = (
 
 /**
  * Removes Latin letters/digits and common OCR noise by converting them to spaces.
+ *
+ * @param s - The string to sanitize.
+ * @param enable - Whether to strip the noisy characters.
+ * @returns The sanitized string with noise removed when enabled.
  */
 const removeLatinAndSymbolNoise = (s: string, enable: boolean): string =>
     enable ? s.replace(RX_LATIN_AND_SYMBOLS, ' ') : s;
@@ -200,6 +236,11 @@ const removeLatinAndSymbolNoise = (s: string, enable: boolean): string =>
  * Applies letter filters:
  * - `lettersAndSpacesOnly`: keep Arabic letters and whitespace, drop everything else to spaces.
  * - `lettersOnly`: keep only Arabic letters, drop everything else.
+ *
+ * @param s - The string to filter.
+ * @param lettersAndSpacesOnly - When true, retains Arabic letters and spaces only.
+ * @param lettersOnly - When true, retains Arabic letters exclusively.
+ * @returns The filtered string according to the provided flags.
  */
 const applyLetterFilters = (s: string, lettersAndSpacesOnly: boolean, lettersOnly: boolean): string => {
     if (lettersAndSpacesOnly) {
@@ -213,6 +254,11 @@ const applyLetterFilters = (s: string, lettersAndSpacesOnly: boolean, lettersOnl
 
 /**
  * Collapses whitespace runs and trims if requested.
+ *
+ * @param s - The string to normalize.
+ * @param collapse - Whether to collapse consecutive whitespace into single spaces.
+ * @param doTrim - Whether to trim leading and trailing whitespace.
+ * @returns The normalized string with whitespace adjustments applied.
  */
 const normalizeWhitespace = (s: string, collapse: boolean, doTrim: boolean): string => {
     if (collapse) {
@@ -226,6 +272,10 @@ const normalizeWhitespace = (s: string, collapse: boolean, doTrim: boolean): str
 
 /**
  * Resolves a boolean by taking an optional override over a preset value.
+ *
+ * @param presetValue - The value defined by the preset.
+ * @param override - Optional override provided by the caller.
+ * @returns The resolved boolean value.
  */
 const resolveBoolean = (presetValue: boolean, override?: boolean): boolean =>
     override === undefined ? presetValue : !!override;
@@ -233,6 +283,10 @@ const resolveBoolean = (presetValue: boolean, override?: boolean): boolean =>
 /**
  * Resolves the tatweel mode by taking an optional override over a preset mode.
  * An override of `true` maps to `'safe'` for convenience.
+ *
+ * @param presetValue - The mode specified by the preset.
+ * @param override - Optional override provided by the caller.
+ * @returns The resolved tatweel mode.
  */
 const resolveTatweelMode = (
     presetValue: false | 'safe' | 'all',

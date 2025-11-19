@@ -190,14 +190,22 @@ function findBestFuzzyMatch(
 }
 
 /**
- * Calculates the maximum allowed edit distance
+ * Calculates the maximum edit distance allowed for a fuzzy comparison.
+ *
+ * @param excerpt - The excerpt currently being matched.
+ * @param cfg - The resolved matching policy in effect.
+ * @returns The maximum permitted edit distance for the excerpt.
  */
 function calculateMaxDistance(excerpt: string, cfg: Required<MatchPolicy>): number {
     return Math.max(cfg.maxEditAbs, Math.ceil(cfg.maxEditRel * excerpt.length));
 }
 
 /**
- * Checks if a candidate should be skipped (already processed)
+ * Checks whether a candidate has already been processed and should be skipped.
+ *
+ * @param candidate - The candidate under consideration.
+ * @param keyset - A set of serialized candidate keys used for deduplication.
+ * @returns True if the candidate was seen before, otherwise false.
  */
 function shouldSkipCandidate(candidate: Candidate, keyset: Set<string>): boolean {
     const key = `${candidate.page}:${candidate.start}:${candidate.seam ? 1 : 0}`;
@@ -209,7 +217,15 @@ function shouldSkipCandidate(candidate: Candidate, keyset: Set<string>): boolean
 }
 
 /**
- * Evaluates a candidate and returns match info if valid
+ * Evaluates a candidate by computing its fuzzy score and checking acceptance.
+ *
+ * @param candidate - The candidate segment to evaluate.
+ * @param excerpt - The normalized excerpt being matched.
+ * @param pagesN - Normalized page content collection.
+ * @param seams - Precomputed seam data for cross-page matching.
+ * @param maxDist - Maximum allowed edit distance for this excerpt.
+ * @param cfg - The resolved matching policy.
+ * @returns The candidate's distance and acceptance threshold if valid, otherwise null.
  */
 function evaluateCandidate(
     candidate: Candidate,
@@ -229,14 +245,23 @@ function evaluateCandidate(
 }
 
 /**
- * Checks if a match is valid (within acceptance threshold)
+ * Determines whether an evaluated match satisfies its acceptance threshold.
+ *
+ * @param dist - The computed edit distance for the match.
+ * @param acceptance - The maximum acceptable distance for the match.
+ * @returns True when the match should be accepted.
  */
 function isValidMatch(dist: number | null, acceptance: number): boolean {
     return dist !== null && dist <= acceptance;
 }
 
 /**
- * Updates the best match if the current match is better
+ * Updates the running "best" match if the current candidate improves it.
+ *
+ * @param current - The previously best fuzzy match, if any.
+ * @param match - The latest candidate match metrics.
+ * @param candidate - The candidate metadata associated with {@link match}.
+ * @returns The preferred match after considering the candidate.
  */
 function updateBestMatch(
     current: FuzzyMatch | null,
@@ -253,7 +278,13 @@ function updateBestMatch(
 }
 
 /**
- * Determines if a new match is better than the current best
+ * Determines whether a new match outranks the current best match.
+ *
+ * @param newDist - Edit distance for the new match.
+ * @param newPage - Page index where the new match resides.
+ * @param bestDist - Edit distance of the existing best match.
+ * @param bestPage - Page index of the existing best match.
+ * @returns True if the new match should replace the current best match.
  */
 function isBetterMatch(newDist: number, newPage: number, bestDist: number, bestPage: number): boolean {
     return newDist < bestDist || (newDist === bestDist && newPage < bestPage);
@@ -530,7 +561,9 @@ const sortMatches = (hits: Map<number, PageHit>) => {
 };
 
 /**
- * Removes weaker seam from adjacent seam pairs
+ * Removes weaker seam matches from adjacent seam pairs.
+ *
+ * @param hits - Mutable map of page hits that may contain seam entries.
  */
 const collapseAdjacentSeams = (hits: Map<number, PageHit>) => {
     const pagesAsc = Array.from(hits.keys()).sort((a, b) => a - b);
@@ -547,14 +580,23 @@ const collapseAdjacentSeams = (hits: Map<number, PageHit>) => {
 };
 
 /**
- * Checks if two hits are adjacent seams that should be collapsed
+ * Checks whether two neighboring hits are both seams that should be merged.
+ *
+ * @param hit1 - The first hit in the pair.
+ * @param hit2 - The second hit in the pair.
+ * @returns True if both hits represent seam matches.
  */
 const shouldCollapseSeams = (hit1?: PageHit, hit2?: PageHit): boolean => {
     return Boolean(hit1?.seam && hit2?.seam);
 };
 
 /**
- * Returns the page number of the weaker seam (or later page if tied)
+ * Selects which seam page to discard based on score ordering.
+ *
+ * @param page1 - The page index for the first seam hit.
+ * @param hit1 - The first seam hit entry.
+ * @param hit2 - The second seam hit entry on the following page.
+ * @returns The page index that should be removed from the hits map.
  */
 const selectWeakerSeam = (page1: number, hit1: PageHit, hit2: PageHit): number => {
     if (hit2.score > hit1.score) {
@@ -567,7 +609,9 @@ const selectWeakerSeam = (page1: number, hit1: PageHit, hit2: PageHit): number =
 };
 
 /**
- * Removes seam hits that are redundant compared to stronger neighbors
+ * Removes seam hits that are redundant compared to their neighbors.
+ *
+ * @param hits - Mutable map of page hits that may contain redundant seams.
  */
 const removeWeakSeams = (hits: Map<number, PageHit>) => {
     const seamPages = Array.from(hits.entries())
@@ -585,7 +629,11 @@ const removeWeakSeams = (hits: Map<number, PageHit>) => {
 };
 
 /**
- * Checks if a seam hit is redundant compared to its neighbor
+ * Determines whether a seam hit is redundant when compared to its neighbor.
+ *
+ * @param seamHit - The seam hit currently under review.
+ * @param neighbor - The neighboring hit on the following page, if any.
+ * @returns True if the seam hit should be removed.
  */
 const isSeamRedundant = (seamHit: PageHit, neighbor?: PageHit): boolean => {
     if (!neighbor) {
@@ -595,7 +643,10 @@ const isSeamRedundant = (seamHit: PageHit, neighbor?: PageHit): boolean => {
 };
 
 /**
- * Splits hits into exact and fuzzy, then sorts and combines them
+ * Splits hits into exact and fuzzy categories, then sorts and merges them.
+ *
+ * @param hits - Map of page hits to rank.
+ * @returns Sorted page numbers ordered by relevance.
  */
 const rankHits = (hits: Map<number, PageHit>): number[] => {
     const exact: [number, PageHit][] = [];

@@ -46,7 +46,12 @@ export const alignTextSegments = (targetLines: string[], segmentLines: string[])
 };
 
 /**
- * Tries to merge two segments in both possible orders and returns the best match.
+ * Tries to merge two candidate segments in both possible orders and returns the best match.
+ *
+ * @param targetLine - The line we are trying to reconstruct.
+ * @param partA - The first candidate segment to evaluate.
+ * @param partB - The second candidate segment to evaluate.
+ * @returns The merged segment that best matches the target line after normalization.
  */
 const findBestSegmentMerge = (targetLine: string, partA: string, partB: string) => {
     const mergedForward = `${partA} ${partB}`;
@@ -61,6 +66,11 @@ const findBestSegmentMerge = (targetLine: string, partA: string, partB: string) 
 
 /**
  * Processes a single target line that needs alignment.
+ *
+ * @param targetLine - The line we are attempting to align to.
+ * @param segmentLines - The collection of available text segments.
+ * @param segmentIndex - The current index within {@link segmentLines} to consider.
+ * @returns An object containing the resulting aligned text and how many segments were consumed.
  */
 const processAlignmentTarget = (targetLine: string, segmentLines: string[], segmentIndex: number) => {
     const currentSegment = segmentLines[segmentIndex];

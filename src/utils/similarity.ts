@@ -128,6 +128,10 @@ export const backtrackAlignment = (
 
 /**
  * Initializes the scoring matrix with gap penalties.
+ *
+ * @param lengthA - Length of the first token sequence.
+ * @param lengthB - Length of the second token sequence.
+ * @returns A matrix seeded with gap penalties for alignment.
  */
 const initializeScoringMatrix = (lengthA: number, lengthB: number): AlignmentCell[][] => {
     const matrix: AlignmentCell[][] = Array.from({ length: lengthA + 1 }, () =>
@@ -147,6 +151,11 @@ const initializeScoringMatrix = (lengthA: number, lengthB: number): AlignmentCel
 
 /**
  * Determines the best alignment direction and score for a cell.
+ *
+ * @param diagonalScore - Score achieved by aligning tokens diagonally.
+ * @param upScore - Score achieved by inserting a gap in the second sequence.
+ * @param leftScore - Score achieved by inserting a gap in the first sequence.
+ * @returns The direction and score that maximize the alignment.
  */
 const getBestAlignment = (
     diagonalScore: number,

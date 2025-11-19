@@ -16,15 +16,15 @@ A lightweight TypeScript library for intelligent OCR text post-processing, speci
 
 ## Features
 
-- 🧠 **Intelligent Text Alignment**: Uses the Needleman-Wunsch algorithm for optimal text sequence alignment
-- 🔤 **Arabic Text Specialization**: Advanced normalization and diacritics handling for Arabic text
-- 🧹 **Noise Detection**: Comprehensive Arabic text noise detection and OCR artifact identification
-- 📝 **Footnote Management**: Smart handling of embedded and standalone footnotes
-- ⚡ **High Performance**: Space-optimized algorithms with O(min(m,n)) space complexity
-- 🎯 **Special Symbol Preservation**: Configurable preservation of religious symbols and honorifics
-- 🔧 **Flexible Configuration**: Customizable similarity thresholds and typo symbols
-- 📦 **Zero Dependencies**: Pure TypeScript implementation with no external dependencies
-- 🌐 **Universal Compatibility**: Works in Node.js, Bun, and modern browsers
+- 🧠 **Sequence-Aware Typo Repair** &mdash; Needleman–Wunsch alignment with typo symbol preservation and duplicate pruning.
+- 📄 **Multi-Page Fuzzy Search** &mdash; Hybrid exact/fuzzy matching with q-gram seeding and cross-page seam handling.
+- 📝 **Footnote Normalisation** &mdash; Converts OCR-confused numerals, fills empty references, and keeps body/footnote sets in sync.
+- 🧮 **Bracket & Quote Balancing** &mdash; Detects mismatched punctuation with positional metadata for editor highlighting.
+- 🧹 **Noise Classification** &mdash; Arabic-aware heuristics for punctuation spam, spacing artefacts, and mixed-script clutter.
+- 🧾 **Comprehensive Typings** &mdash; Fully documented API surface with rich JSDoc coverage and generated declaration files.
+- ⚙️ **Configurable Pipelines** &mdash; Fine-grained match policies, sanitisation presets, and typo symbol lists.
+- 🧪 **High Test Coverage** &mdash; Extensive Bun test suite covering alignment, matching, sanitisation, and utility helpers.
+- 🧳 **Lightweight Tooling** &mdash; Ships with the upstream `tsdown` bundler for fast Bun/Node builds and typed outputs.
 
 ## Installation
 
@@ -53,7 +53,7 @@ const correctedText = 'محمد ﷺ رسول الله';
 const typoSymbols = ['ﷺ', '﷽', 'ﷻ'];
 
 const result = fixTypo(originalText, correctedText, { typoSymbols });
-console.log(result); // 'محمد صلى الله عليه ﷺ رسول الله'
+console.log(result); // 'محمد ﷺ رسول الله عليه وسلم'
 
 // Noise detection for OCR cleanup
 const cleanText = isArabicTextNoise('السلام عليكم'); // false
@@ -953,8 +953,9 @@ Contributions are welcome. Please ensure your contributions adhere to the coding
 2. Install dependencies: `bun install` (requires [Bun](https://bun.sh/))
 3. Make your changes
 4. Run tests: `bun test`
-5. Run linting: `bun run lint`
-6. Submit a pull request
+5. Build artefacts (optional verification): `bun run build`
+6. Run linting: `bun run lint`
+7. Submit a pull request
 
 ### Running Tests
 

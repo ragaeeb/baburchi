@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { processTextAlignment } from './typos';
+import { fixTypo, processTextAlignment } from './typos';
 
 describe('typos', () => {
     describe('processTextAlignment', () => {
@@ -52,6 +52,26 @@ describe('typos', () => {
         it('should preserve diacritics when appropriate', () => {
             const result = processTextAlignment('النص صلى الله عليه وسلم العربي', 'النَّص ﷺ العَرَبي', defaultOptions);
             expect(result).toEqual('النص صلى الله عليه ﷺ العربي');
+        });
+    });
+
+    describe('fixTypo', () => {
+        it('should fall back to defaults and correct text', () => {
+            const result = fixTypo('محمد صلي الله عليه وسلم', 'محمد ﷺ رسول الله', {
+                typoSymbols: ['ﷺ'],
+            });
+
+            expect(result).toEqual('محمد ﷺ رسول الله عليه وسلم');
+        });
+
+        it('should honor custom thresholds', () => {
+            const result = fixTypo('totally different text', 'completely unrelated', {
+                highSimilarityThreshold: 0.5,
+                similarityThreshold: 0.1,
+                typoSymbols: ['ﷺ'],
+            });
+
+            expect(result).toEqual('totally different text');
         });
     });
 });

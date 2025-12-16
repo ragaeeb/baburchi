@@ -159,7 +159,7 @@ describe('sanitizeArabic Performance Benchmark', () => {
             console.log(`   ⏱️  Time: ${elapsed.toFixed(2)}ms`);
             console.log(`   📈 Throughput: ${((TEXT_COUNT / elapsed) * 1000).toFixed(0)} texts/sec`);
 
-            const improvement = ((baselineSearchTime - elapsed) / baselineSearchTime) * 100;
+            const improvement = ((baselineAggressiveTime - elapsed) / baselineAggressiveTime) * 100;
             console.log(`   🚀 Improvement vs baseline: ${improvement.toFixed(1)}% faster`);
 
             expect(results.length).toBe(TEXT_COUNT);

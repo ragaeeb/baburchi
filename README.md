@@ -197,7 +197,7 @@ Unified Arabic text sanitizer that provides fast, configurable cleanup for Arabi
 
 **Parameters:**
 
-- `input` (string): The Arabic text to sanitize
+- `input` (string | string[]): The Arabic text to sanitize (or an array for optimized batch processing)
 - `optionsOrPreset` (string | object): Either a preset name or custom options
 
 **Presets:**
@@ -206,13 +206,20 @@ Unified Arabic text sanitizer that provides fast, configurable cleanup for Arabi
 - `"search"`: Tolerant search normalization (removes diacritics, normalizes letters)
 - `"aggressive"`: Indexing-friendly (letters and spaces only, removes everything else)
 
+**Batch processing / factory:**
+
+- Pass an array to resolve options once and sanitize many strings efficiently.
+- Or pre-resolve options with `createArabicSanitizer(...)` and reuse the returned function.
+
 **Custom Options:**
 
 ```typescript
 interface SanitizeOptions {
     base?: 'light' | 'search' | 'aggressive' | 'none';
+    nfc?: boolean;
     stripDiacritics?: boolean;
-    stripTatweel?: boolean;
+    stripFootnotes?: boolean;
+    stripTatweel?: boolean | 'safe' | 'all';
     normalizeAlif?: boolean;
     replaceAlifMaqsurah?: boolean;
     replaceTaMarbutahWithHa?: boolean;
@@ -227,10 +234,12 @@ interface SanitizeOptions {
 }
 ```
 
+**Note on `nfc`**: NFC normalization does **not** remove diacritics; it canonicalizes equivalent sequences. This library applies an Arabic-focused NFC fast-path for common OCR compositions (e.g., Alif + combining hamza/madda), while `stripDiacritics` controls tashkīl removal.
+
 **Examples:**
 
 ```typescript
-import { sanitizeArabic } from 'baburchi';
+import { createArabicSanitizer, sanitizeArabic } from 'baburchi';
 
 // Light display cleanup
 sanitizeArabic('  مرحبا\u200C\u200D   بالعالم  ', 'light'); // → 'مرحبا بالعالم'
@@ -243,6 +252,13 @@ sanitizeArabic('اَلسَّلَامُ 1435/3/29 هـ — www', 'aggressive'); /
 
 // Custom: Tatweel-only, preserving dates/list markers
 sanitizeArabic('أبـــتِـــكَةُ', { base: 'none', stripTatweel: true }); // → 'أبتِكَةُ'
+
+// Batch processing (optimized)
+sanitizeArabic(['اَلسَّلَامُ عَلَيْكُمْ', 'أبـــتِـــكَةُ'], 'search'); // → ['السلام عليكم', 'أبتِكَةُ']
+
+// Factory (pre-resolved options)
+const sanitizeSearch = createArabicSanitizer('search');
+['اَلسَّلَامُ عَلَيْكُمْ', 'أبـــتِـــكَةُ'].map(sanitizeSearch);
 
 // Zero-width controls → spaces
 sanitizeArabic('يَخْلُوَ ‏. ‏ قَالَ غَرِيبٌ ‏. ‏', { 

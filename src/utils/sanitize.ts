@@ -1,5 +1,3 @@
-import { removeFootnoteReferencesSimple, removeSingleDigitFootnoteReferences } from './textUtils';
-
 /**
  * Ultra-fast Arabic text sanitizer for search/indexing/display.
  * Optimized for very high call rates: avoids per-call object spreads and minimizes allocations.
@@ -17,7 +15,15 @@ export type SanitizeOptions = {
     /** Base to merge over. `'none'` applies only the options you specify. Default when passing an object: `'light'`. */
     base?: SanitizeBase;
 
-    /** Unicode NFC normalization. Default: `true` in all presets. */
+    /**
+     * NFC normalization (fast-path).
+     *
+     * For performance, this sanitizer avoids calling `String.prototype.normalize('NFC')` and instead
+     * applies the key Arabic canonical compositions inline (hamza/madda combining marks).
+     * This preserves the NFC behavior that matters for typical Arabic OCR text while keeping throughput high.
+     *
+     * Default: `true` in all presets.
+     */
     nfc?: boolean;
 
     /** Strip zero-width controls (U+200B–U+200F, U+202A–U+202E, U+2060–U+2064, U+FEFF). Default: `true` in presets. */
@@ -92,216 +98,23 @@ type PresetOptions = {
     removeHijriMarker: boolean;
 };
 
-const RX_SPACES = /\s+/g;
-const RX_TATWEEL = /\u0640/g;
-const RX_DIACRITICS = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED]/g;
-const RX_ALIF_VARIANTS = /[أإآٱ]/g;
-const RX_ALIF_MAQSURAH = /\u0649/g;
-const RX_TA_MARBUTAH = /\u0629/g;
-const RX_ZERO_WIDTH = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
-const RX_LATIN_AND_SYMBOLS = /[A-Za-z]+[0-9]*|[0-9]+|[¬§`=]|[/]{2,}|[&]|[ﷺ]/g;
-const RX_NON_ARABIC_LETTERS = /[^\u0621-\u063A\u0641-\u064A\u0671\u067E\u0686\u06A4-\u06AF\u06CC\u06D2\u06D3]/g;
-const RX_NOT_LETTERS_OR_SPACE = /[^\u0621-\u063A\u0641-\u064A\u0671\u067E\u0686\u06A4-\u06AF\u06CC\u06D2\u06D3\s]/g;
-
-/**
- * Checks whether a code point represents the ASCII space character.
- *
- * @param code - The numeric code point to evaluate.
- * @returns True when the code point is the ASCII space character.
- */
-const isAsciiSpace = (code: number): boolean => code === 32;
-
-/**
- * Checks whether a code point represents a Western or Arabic-Indic digit.
- *
- * @param code - The numeric code point to evaluate.
- * @returns True when the code point is a digit in either numeral system.
- */
-const isDigitCodePoint = (code: number): boolean => (code >= 48 && code <= 57) || (code >= 0x0660 && code <= 0x0669);
-
-/**
- * Removes tatweel while preserving a tatweel that immediately follows a digit or 'ه'.
- * This protects list markers and Hijri date forms.
- *
- * @param s - The string to sanitize.
- * @returns The sanitized string with only safe tatweel removed.
- */
-const removeTatweelSafely = (s: string): string =>
-    s.replace(RX_TATWEEL, (_m, i: number, str: string) => {
-        let j = i - 1;
-        while (j >= 0 && isAsciiSpace(str.charCodeAt(j))) {
-            j--;
-        }
-        if (j >= 0) {
-            const prev = str.charCodeAt(j);
-            if (isDigitCodePoint(prev) || prev === 0x0647) {
-                return 'ـ';
-            }
-        }
-        return '';
-    });
-
-/**
- * Removes the Hijri date marker when it immediately follows a date-like token.
- *
- * @param s - The string to sanitize.
- * @returns The string without redundant Hijri markers.
- */
-const removeHijriDateMarker = (s: string): string =>
-    s.replace(/([0-9\u0660-\u0669][0-9\u0660-\u0669/\-\s]*?)\s*ه(?:ـ)?(?=(?:\s|$|[^\p{L}\p{N}]))/gu, '$1');
-
-/**
- * Applies NFC normalization if available and requested.
- *
- * @param s - The string to normalize.
- * @param enable - Flag indicating whether normalization should be applied.
- * @returns The normalized string when enabled; otherwise the original string.
- */
-const applyNfcNormalization = (s: string, enable: boolean): string => (enable && s.normalize ? s.normalize('NFC') : s);
-
-/**
- * Removes zero-width controls, optionally replacing them with spaces.
- *
- * @param s - The input string to process.
- * @param enable - Whether zero-width characters should be removed.
- * @param asSpace - When true, replaces zero-width characters with spaces instead of deleting them.
- * @returns The updated string with zero-width characters handled.
- */
-const removeZeroWidthControls = (s: string, enable: boolean, asSpace: boolean): string =>
-    enable ? s.replace(RX_ZERO_WIDTH, asSpace ? ' ' : '') : s;
-
-/**
- * Removes diacritics and tatweel according to the selected mode.
- *
- * @param s - The string to sanitize.
- * @param removeDiacritics - Whether diacritics should be stripped.
- * @param tatweelMode - Mode describing how tatweel characters should be handled.
- * @returns The sanitized string after diacritic and tatweel processing.
- */
-const removeDiacriticsAndTatweel = (
-    s: string,
-    removeDiacritics: boolean,
-    tatweelMode: false | 'safe' | 'all',
-): string => {
-    if (removeDiacritics) {
-        s = s.replace(RX_DIACRITICS, '');
-    }
-    if (tatweelMode === 'safe') {
-        return removeTatweelSafely(s);
-    }
-    if (tatweelMode === 'all') {
-        return s.replace(RX_TATWEEL, '');
-    }
-    return s;
-};
-
-/**
- * Applies canonical character mappings: Alif variants, alif maqṣūrah, tāʾ marbūṭa.
- *
- * @param s - The string to normalize.
- * @param normalizeAlif - Whether to normalize different Alif forms to bare Alif.
- * @param maqsurahToYa - Whether to convert alif maqṣūrah to yāʾ.
- * @param taMarbutahToHa - Whether to convert tāʾ marbūṭa to hāʾ.
- * @returns The string after applying character mappings.
- */
-const applyCharacterMappings = (
-    s: string,
-    normalizeAlif: boolean,
-    maqsurahToYa: boolean,
-    taMarbutahToHa: boolean,
-): string => {
-    if (normalizeAlif) {
-        s = s.replace(RX_ALIF_VARIANTS, 'ا');
-    }
-    if (maqsurahToYa) {
-        s = s.replace(RX_ALIF_MAQSURAH, 'ي');
-    }
-    if (taMarbutahToHa) {
-        s = s.replace(RX_TA_MARBUTAH, 'ه');
-    }
-    return s;
-};
-
-/**
- * Removes Latin letters/digits and common OCR noise by converting them to spaces.
- *
- * @param s - The string to sanitize.
- * @param enable - Whether to strip the noisy characters.
- * @returns The sanitized string with noise removed when enabled.
- */
-const removeLatinAndSymbolNoise = (s: string, enable: boolean): string =>
-    enable ? s.replace(RX_LATIN_AND_SYMBOLS, ' ') : s;
-
-/**
- * Applies letter filters:
- * - `lettersAndSpacesOnly`: keep Arabic letters and whitespace, drop everything else to spaces.
- * - `lettersOnly`: keep only Arabic letters, drop everything else.
- *
- * @param s - The string to filter.
- * @param lettersAndSpacesOnly - When true, retains Arabic letters and spaces only.
- * @param lettersOnly - When true, retains Arabic letters exclusively.
- * @returns The filtered string according to the provided flags.
- */
-const applyLetterFilters = (s: string, lettersAndSpacesOnly: boolean, lettersOnly: boolean): string => {
-    if (lettersAndSpacesOnly) {
-        return s.replace(RX_NOT_LETTERS_OR_SPACE, ' ');
-    }
-    if (lettersOnly) {
-        return s.replace(RX_NON_ARABIC_LETTERS, '');
-    }
-    return s;
-};
-
-/**
- * Collapses whitespace runs and trims if requested.
- *
- * @param s - The string to normalize.
- * @param collapse - Whether to collapse consecutive whitespace into single spaces.
- * @param doTrim - Whether to trim leading and trailing whitespace.
- * @returns The normalized string with whitespace adjustments applied.
- */
-const normalizeWhitespace = (s: string, collapse: boolean, doTrim: boolean): string => {
-    if (collapse) {
-        s = s.replace(RX_SPACES, ' ');
-    }
-    if (doTrim) {
-        s = s.trim();
-    }
-    return s;
-};
-
-/**
- * Resolves a boolean by taking an optional override over a preset value.
- *
- * @param presetValue - The value defined by the preset.
- * @param override - Optional override provided by the caller.
- * @returns The resolved boolean value.
- */
-const resolveBoolean = (presetValue: boolean, override?: boolean): boolean =>
-    override === undefined ? presetValue : !!override;
-
-/**
- * Resolves the tatweel mode by taking an optional override over a preset mode.
- * An override of `true` maps to `'safe'` for convenience.
- *
- * @param presetValue - The mode specified by the preset.
- * @param override - Optional override provided by the caller.
- * @returns The resolved tatweel mode.
- */
-const resolveTatweelMode = (
-    presetValue: false | 'safe' | 'all',
-    override?: boolean | 'safe' | 'all',
-): false | 'safe' | 'all' => {
-    if (override === undefined) {
-        return presetValue;
-    }
-    if (override === true) {
-        return 'safe';
-    }
-    if (override === false) {
-        return false;
-    }
-    return override;
+/** Fully-resolved internal options with short names for performance. */
+type ResolvedOptions = {
+    nfc: boolean;
+    stripZW: boolean;
+    zwAsSpace: boolean;
+    removeHijri: boolean;
+    removeDia: boolean;
+    tatweelMode: false | 'safe' | 'all';
+    normAlif: boolean;
+    maqToYa: boolean;
+    taToHa: boolean;
+    removeFootnotes: boolean;
+    lettersSpacesOnly: boolean;
+    stripNoise: boolean;
+    lettersOnly: boolean;
+    collapseWS: boolean;
+    doTrim: boolean;
 };
 
 const PRESETS: Record<SanitizePreset, PresetOptions> = {
@@ -376,6 +189,588 @@ const PRESET_NONE: PresetOptions = {
     zeroWidthToSpace: false,
 };
 
+// Constants for character codes
+const CHAR_SPACE = 32;
+const CHAR_TATWEEL = 0x0640;
+const CHAR_HA = 0x0647;
+const CHAR_YA = 0x064a;
+const CHAR_WAW = 0x0648;
+const CHAR_ALIF = 0x0627;
+const CHAR_ALIF_MADDA = 0x0622;
+const CHAR_ALIF_HAMZA_ABOVE = 0x0623;
+const CHAR_WAW_HAMZA_ABOVE = 0x0624;
+const CHAR_ALIF_HAMZA_BELOW = 0x0625;
+const CHAR_YEH_HAMZA_ABOVE = 0x0626;
+const CHAR_ALIF_WASLA = 0x0671;
+const CHAR_ALIF_MAQSURAH = 0x0649;
+const CHAR_TA_MARBUTAH = 0x0629;
+const CHAR_MADDA_ABOVE = 0x0653;
+const CHAR_HAMZA_ABOVE_MARK = 0x0654;
+const CHAR_HAMZA_BELOW_MARK = 0x0655;
+
+// Shared resources to avoid allocations
+let sharedBuffer = new Uint16Array(2048); // Start with 2KB (enough for ~1000 chars)
+const decoder = new TextDecoder('utf-16le');
+
+// Diacritic ranges
+const isDiacritic = (code: number): boolean => {
+    return (
+        (code >= 0x064b && code <= 0x065f) ||
+        (code >= 0x0610 && code <= 0x061a) ||
+        code === 0x0670 ||
+        (code >= 0x06d6 && code <= 0x06ed)
+    );
+};
+
+const isZeroWidth = (code: number): boolean => {
+    return (
+        (code >= 0x200b && code <= 0x200f) ||
+        (code >= 0x202a && code <= 0x202e) ||
+        (code >= 0x2060 && code <= 0x2064) ||
+        code === 0xfeff
+    );
+};
+
+const isLatinOrDigit = (code: number): boolean => {
+    return (
+        (code >= 65 && code <= 90) || // A-Z
+        (code >= 97 && code <= 122) || // a-z
+        (code >= 48 && code <= 57) // 0-9
+    );
+};
+
+const isSymbol = (code: number): boolean => {
+    // [¬§`=]|[&]|[ﷺ]
+    return (
+        code === 0x00ac || // ¬
+        code === 0x00a7 || // §
+        code === 0x0060 || // `
+        code === 0x003d || // =
+        code === 0x0026 || // &
+        code === 0xfdfa // ﷺ
+    );
+};
+
+const isArabicLetter = (code: number): boolean => {
+    return (
+        (code >= 0x0621 && code <= 0x063a) ||
+        (code >= 0x0641 && code <= 0x064a) ||
+        code === 0x0671 ||
+        code === 0x067e ||
+        code === 0x0686 ||
+        (code >= 0x06a4 && code <= 0x06af) ||
+        code === 0x06cc ||
+        code === 0x06d2 ||
+        code === 0x06d3
+    );
+};
+
+/**
+ * Checks whether a code point represents a Western or Arabic-Indic digit.
+ *
+ * @param code - The numeric code point to evaluate.
+ * @returns True when the code point is a digit in either numeral system.
+ */
+const isDigit = (code: number): boolean => (code >= 48 && code <= 57) || (code >= 0x0660 && code <= 0x0669);
+
+/**
+ * Resolves a boolean by taking an optional override over a preset value.
+ *
+ * @param presetValue - The value defined by the preset.
+ * @param override - Optional override provided by the caller.
+ * @returns The resolved boolean value.
+ */
+const resolveBoolean = (presetValue: boolean, override?: boolean): boolean =>
+    override === undefined ? presetValue : !!override;
+
+/**
+ * Resolves the tatweel mode by taking an optional override over a preset mode.
+ * An override of `true` maps to `'safe'` for convenience.
+ *
+ * @param presetValue - The mode specified by the preset.
+ * @param override - Optional override provided by the caller.
+ * @returns The resolved tatweel mode.
+ */
+const resolveTatweelMode = (
+    presetValue: false | 'safe' | 'all',
+    override?: boolean | 'safe' | 'all',
+): false | 'safe' | 'all' => {
+    if (override === undefined) {
+        return presetValue;
+    }
+    if (override === true) {
+        return 'safe';
+    }
+    if (override === false) {
+        return false;
+    }
+    return override;
+};
+
+/**
+ * Internal sanitization logic that applies all transformations to a single string.
+ * Uses single-pass character transformation for maximum performance when possible.
+ * This function assumes all options have been pre-resolved for maximum performance.
+ */
+const applySanitization = (input: string, options: ResolvedOptions): string => {
+    if (!input) {
+        return '';
+    }
+
+    const {
+        nfc,
+        stripZW,
+        zwAsSpace,
+        removeHijri,
+        removeDia,
+        tatweelMode,
+        normAlif,
+        maqToYa,
+        taToHa,
+        removeFootnotes,
+        lettersSpacesOnly,
+        stripNoise,
+        lettersOnly,
+        collapseWS,
+        doTrim,
+    } = options;
+
+    /**
+     * NFC Normalization (Fast Path)
+     *
+     * `String.prototype.normalize('NFC')` is extremely expensive under high throughput.
+     * For Arabic OCR text, the main canonical compositions we care about are:
+     * - ا + ◌ٓ (U+0653) → آ
+     * - ا + ◌ٔ (U+0654) → أ
+     * - ا + ◌ٕ (U+0655) → إ
+     * - و + ◌ٔ (U+0654) → ؤ
+     * - ي + ◌ٔ (U+0654) → ئ
+     *
+     * We implement these compositions inline during the main loop, avoiding full NFC
+     * normalization in the common case while preserving behavior needed by our sanitizer.
+     */
+    const text = input;
+    const len = text.length;
+
+    // Ensure shared buffer is large enough
+    if (len > sharedBuffer.length) {
+        sharedBuffer = new Uint16Array(len + 1024);
+    }
+    const buffer = sharedBuffer;
+    let bufIdx = 0;
+
+    let lastWasSpace = false;
+
+    // Skip leading whitespace if trimming
+    let start = 0;
+    if (doTrim) {
+        while (start < len && text.charCodeAt(start) <= 32) {
+            start++;
+        }
+    }
+
+    for (let i = start; i < len; i++) {
+        const code = text.charCodeAt(i);
+
+        // Whitespace handling
+        if (code <= 32) {
+            if (lettersOnly) {
+                continue; // Drop spaces if lettersOnly
+            }
+
+            if (collapseWS) {
+                if (!lastWasSpace && bufIdx > 0) {
+                    buffer[bufIdx++] = CHAR_SPACE;
+                    lastWasSpace = true;
+                }
+            } else {
+                buffer[bufIdx++] = CHAR_SPACE; // Normalize to space
+                lastWasSpace = false;
+            }
+            continue;
+        }
+
+        // NFC (subset) for Arabic canonical compositions: merge combining marks into previous output
+        if (nfc) {
+            if (code === CHAR_MADDA_ABOVE || code === CHAR_HAMZA_ABOVE_MARK || code === CHAR_HAMZA_BELOW_MARK) {
+                const prevIdx = bufIdx - 1;
+                if (prevIdx >= 0) {
+                    const prev = buffer[prevIdx];
+                    let composed = 0;
+
+                    if (prev === CHAR_ALIF) {
+                        if (code === CHAR_MADDA_ABOVE) {
+                            composed = CHAR_ALIF_MADDA;
+                        } else if (code === CHAR_HAMZA_ABOVE_MARK) {
+                            composed = CHAR_ALIF_HAMZA_ABOVE;
+                        } else {
+                            // CHAR_HAMZA_BELOW_MARK
+                            composed = CHAR_ALIF_HAMZA_BELOW;
+                        }
+                    } else if (code === CHAR_HAMZA_ABOVE_MARK) {
+                        // Only Hamza Above composes for WAW/YEH in NFC
+                        if (prev === CHAR_WAW) {
+                            composed = CHAR_WAW_HAMZA_ABOVE;
+                        } else if (prev === CHAR_YA) {
+                            composed = CHAR_YEH_HAMZA_ABOVE;
+                        }
+                    }
+
+                    if (composed !== 0) {
+                        buffer[prevIdx] = composed;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Zero width
+        if (stripZW && isZeroWidth(code)) {
+            if (zwAsSpace) {
+                if (collapseWS) {
+                    if (!lastWasSpace && bufIdx > 0) {
+                        buffer[bufIdx++] = CHAR_SPACE;
+                        lastWasSpace = true;
+                    }
+                } else {
+                    buffer[bufIdx++] = CHAR_SPACE;
+                    lastWasSpace = false;
+                }
+            }
+            continue;
+        }
+
+        // Hijri Marker Removal (Must run before letter filtering removes digits)
+        if (removeHijri && code === CHAR_HA) {
+            let nextIdx = i + 1;
+            if (nextIdx < len && text.charCodeAt(nextIdx) === CHAR_TATWEEL) {
+                nextIdx++;
+            }
+
+            let isBoundary = false;
+            if (nextIdx >= len) {
+                isBoundary = true;
+            } else {
+                const nextCode = text.charCodeAt(nextIdx);
+                if (nextCode <= 32 || isSymbol(nextCode) || nextCode === 47 || nextCode === 45) {
+                    isBoundary = true;
+                }
+            }
+
+            if (isBoundary) {
+                let backIdx = i - 1;
+                while (backIdx >= 0) {
+                    const c = text.charCodeAt(backIdx);
+                    if (c <= 32 || isZeroWidth(c)) {
+                        backIdx--;
+                    } else {
+                        break;
+                    }
+                }
+                if (backIdx >= 0 && isDigit(text.charCodeAt(backIdx))) {
+                    if (nextIdx > i + 1) {
+                        i++;
+                    }
+                    continue;
+                }
+            }
+        }
+
+        // Diacritics
+        if (removeDia && isDiacritic(code)) {
+            continue;
+        }
+
+        // Tatweel
+        if (code === CHAR_TATWEEL) {
+            if (tatweelMode === 'all') {
+                continue;
+            }
+            if (tatweelMode === 'safe') {
+                let backIdx = bufIdx - 1;
+                while (backIdx >= 0 && buffer[backIdx] === CHAR_SPACE) {
+                    backIdx--;
+                }
+                if (backIdx >= 0) {
+                    const prev = buffer[backIdx];
+                    if (isDigit(prev) || prev === CHAR_HA) {
+                        // Keep it
+                    } else {
+                        continue; // Drop
+                    }
+                } else {
+                    continue; // Drop
+                }
+            }
+        }
+
+        // Latin and Symbols (Skip if letter filtering will handle it)
+        if (stripNoise && !lettersSpacesOnly && !lettersOnly) {
+            if (isLatinOrDigit(code) || isSymbol(code)) {
+                if (collapseWS) {
+                    if (!lastWasSpace && bufIdx > 0) {
+                        buffer[bufIdx++] = CHAR_SPACE;
+                        lastWasSpace = true;
+                    }
+                } else {
+                    buffer[bufIdx++] = CHAR_SPACE;
+                    lastWasSpace = false;
+                }
+                continue;
+            }
+            // Double slash check //
+            if (code === 47 && i + 1 < len && text.charCodeAt(i + 1) === 47) {
+                while (i + 1 < len && text.charCodeAt(i + 1) === 47) {
+                    i++;
+                }
+                if (collapseWS) {
+                    if (!lastWasSpace && bufIdx > 0) {
+                        buffer[bufIdx++] = CHAR_SPACE;
+                        lastWasSpace = true;
+                    }
+                } else {
+                    buffer[bufIdx++] = CHAR_SPACE;
+                    lastWasSpace = false;
+                }
+                continue;
+            }
+        }
+
+        // Footnote Removal (Skip if letter filtering will handle it)
+        if (removeFootnotes && !lettersSpacesOnly && !lettersOnly && code === 40) {
+            // (
+            let nextIdx = i + 1;
+            if (nextIdx < len && text.charCodeAt(nextIdx) === CHAR_SPACE) {
+                nextIdx++;
+            }
+
+            if (nextIdx < len) {
+                const c1 = text.charCodeAt(nextIdx);
+
+                // Pattern 1: (¬123...)
+                if (c1 === 0x00ac) {
+                    // ¬
+                    nextIdx++;
+                    let hasDigits = false;
+                    while (nextIdx < len) {
+                        const c = text.charCodeAt(nextIdx);
+                        if (c >= 0x0660 && c <= 0x0669) {
+                            hasDigits = true;
+                            nextIdx++;
+                        } else {
+                            break;
+                        }
+                    }
+                    if (hasDigits && nextIdx < len) {
+                        if (text.charCodeAt(nextIdx) === 41) {
+                            // )
+                            i = nextIdx;
+                            if (collapseWS) {
+                                if (!lastWasSpace && bufIdx > 0) {
+                                    buffer[bufIdx++] = CHAR_SPACE;
+                                    lastWasSpace = true;
+                                }
+                            } else {
+                                buffer[bufIdx++] = CHAR_SPACE;
+                                lastWasSpace = false;
+                            }
+                            continue;
+                        }
+                        if (text.charCodeAt(nextIdx) === CHAR_SPACE) {
+                            nextIdx++;
+                            if (nextIdx < len && text.charCodeAt(nextIdx) === 41) {
+                                i = nextIdx;
+                                if (collapseWS) {
+                                    if (!lastWasSpace && bufIdx > 0) {
+                                        buffer[bufIdx++] = CHAR_SPACE;
+                                        lastWasSpace = true;
+                                    }
+                                } else {
+                                    buffer[bufIdx++] = CHAR_SPACE;
+                                    lastWasSpace = false;
+                                }
+                                continue;
+                            }
+                        }
+                    }
+                }
+
+                // Pattern 2: (1) or (1 X)
+                else if (c1 >= 0x0660 && c1 <= 0x0669) {
+                    let tempIdx = nextIdx + 1;
+                    let matched = false;
+
+                    if (tempIdx < len) {
+                        const c2 = text.charCodeAt(tempIdx);
+                        if (c2 === 41) {
+                            // )
+                            matched = true;
+                            tempIdx++;
+                        } else if (c2 === CHAR_SPACE) {
+                            // Space
+                            tempIdx++;
+                            if (tempIdx < len) {
+                                const c3 = text.charCodeAt(tempIdx);
+                                if (c3 >= 0x0600 && c3 <= 0x06ff) {
+                                    tempIdx++;
+                                    if (tempIdx < len && text.charCodeAt(tempIdx) === 41) {
+                                        matched = true;
+                                        tempIdx++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (matched) {
+                        i = tempIdx - 1;
+                        if (collapseWS) {
+                            if (!lastWasSpace && bufIdx > 0) {
+                                buffer[bufIdx++] = CHAR_SPACE;
+                                lastWasSpace = true;
+                            }
+                        } else {
+                            buffer[bufIdx++] = CHAR_SPACE;
+                            lastWasSpace = false;
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Letter Filtering (Aggressive)
+        if (lettersSpacesOnly || lettersOnly) {
+            if (!isArabicLetter(code)) {
+                if (lettersOnly) {
+                    continue;
+                }
+                // lettersSpacesOnly -> replace with space
+                if (collapseWS) {
+                    if (!lastWasSpace && bufIdx > 0) {
+                        buffer[bufIdx++] = CHAR_SPACE;
+                        lastWasSpace = true;
+                    }
+                } else {
+                    buffer[bufIdx++] = CHAR_SPACE;
+                    lastWasSpace = false;
+                }
+                continue;
+            }
+
+            // Normalization logic duplicated for speed
+            let outCode = code;
+            if (normAlif) {
+                if (
+                    code === CHAR_ALIF_MADDA ||
+                    code === CHAR_ALIF_HAMZA_ABOVE ||
+                    code === CHAR_ALIF_HAMZA_BELOW ||
+                    code === CHAR_ALIF_WASLA
+                ) {
+                    outCode = CHAR_ALIF;
+                }
+            }
+            if (maqToYa && code === CHAR_ALIF_MAQSURAH) {
+                outCode = CHAR_YA;
+            }
+            if (taToHa && code === CHAR_TA_MARBUTAH) {
+                outCode = CHAR_HA;
+            }
+
+            buffer[bufIdx++] = outCode;
+            lastWasSpace = false;
+            continue;
+        }
+
+        // Normalization
+        let outCode = code;
+        if (normAlif) {
+            if (
+                code === CHAR_ALIF_MADDA ||
+                code === CHAR_ALIF_HAMZA_ABOVE ||
+                code === CHAR_ALIF_HAMZA_BELOW ||
+                code === CHAR_ALIF_WASLA
+            ) {
+                outCode = CHAR_ALIF;
+            }
+        }
+        if (maqToYa && code === CHAR_ALIF_MAQSURAH) {
+            outCode = CHAR_YA;
+        }
+        if (taToHa && code === CHAR_TA_MARBUTAH) {
+            outCode = CHAR_HA;
+        }
+
+        buffer[bufIdx++] = outCode;
+        lastWasSpace = false;
+    }
+
+    // Trailing trim
+    if (doTrim && lastWasSpace && bufIdx > 0) {
+        bufIdx--;
+    }
+
+    if (bufIdx === 0) {
+        return '';
+    }
+    const resultView = buffer.subarray(0, bufIdx);
+    return decoder.decode(resultView);
+};
+
+/**
+ * Resolves options from a preset or custom options object.
+ * Returns all resolved flags for reuse in batch processing.
+ */
+const resolveOptions = (optionsOrPreset: SanitizePreset | SanitizeOptions): ResolvedOptions => {
+    let preset: PresetOptions;
+    let opts: SanitizeOptions | null = null;
+
+    if (typeof optionsOrPreset === 'string') {
+        preset = PRESETS[optionsOrPreset];
+    } else {
+        const base = optionsOrPreset.base ?? 'light';
+        preset = base === 'none' ? PRESET_NONE : PRESETS[base];
+        opts = optionsOrPreset;
+    }
+
+    return {
+        collapseWS: resolveBoolean(preset.collapseWhitespace, opts?.collapseWhitespace),
+        doTrim: resolveBoolean(preset.trim, opts?.trim),
+        lettersOnly: resolveBoolean(preset.keepOnlyArabicLetters, opts?.keepOnlyArabicLetters),
+        lettersSpacesOnly: resolveBoolean(preset.lettersAndSpacesOnly, opts?.lettersAndSpacesOnly),
+        maqToYa: resolveBoolean(preset.replaceAlifMaqsurah, opts?.replaceAlifMaqsurah),
+        nfc: resolveBoolean(preset.nfc, opts?.nfc),
+        normAlif: resolveBoolean(preset.normalizeAlif, opts?.normalizeAlif),
+        removeDia: resolveBoolean(preset.stripDiacritics, opts?.stripDiacritics),
+        removeFootnotes: resolveBoolean(preset.stripFootnotes, opts?.stripFootnotes),
+        removeHijri: resolveBoolean(preset.removeHijriMarker, opts?.removeHijriMarker),
+        stripNoise: resolveBoolean(preset.stripLatinAndSymbols, opts?.stripLatinAndSymbols),
+        stripZW: resolveBoolean(preset.stripZeroWidth, opts?.stripZeroWidth),
+        taToHa: resolveBoolean(preset.replaceTaMarbutahWithHa, opts?.replaceTaMarbutahWithHa),
+        tatweelMode: resolveTatweelMode(preset.stripTatweel, opts?.stripTatweel),
+        zwAsSpace: resolveBoolean(preset.zeroWidthToSpace, opts?.zeroWidthToSpace),
+    };
+};
+
+/**
+ * Creates a reusable sanitizer function with pre-resolved options.
+ * Use this when you need to sanitize many strings with the same options
+ * for maximum performance.
+ *
+ * @example
+ * ```ts
+ * const sanitize = createArabicSanitizer('search');
+ * const results = texts.map(sanitize);
+ * ```
+ */
+export const createArabicSanitizer = (
+    optionsOrPreset: SanitizePreset | SanitizeOptions = 'search',
+): ((input: string) => string) => {
+    const resolved = resolveOptions(optionsOrPreset);
+
+    return (input: string): string => applySanitization(input, resolved);
+};
+
 /**
  * Sanitizes Arabic text according to a preset or custom options.
  *
@@ -388,65 +783,50 @@ const PRESET_NONE: PresetOptions = {
  * - Passing an options object overlays the selected `base` preset (default `'light'`).
  * - Use `base: 'none'` to apply **only** the rules you specify (e.g., tatweel only).
  *
+ * **Batch processing**: Pass an array of strings for optimized batch processing.
+ * Options are resolved once and applied to all strings, providing significant
+ * performance gains over calling the function in a loop.
+ *
  * Examples:
  * ```ts
  * sanitizeArabic('أبـــتِـــكَةُ', { base: 'none', stripTatweel: true }); // 'أبتِكَةُ'
  * sanitizeArabic('1435/3/29 هـ', 'aggressive'); // '1435 3 29'
  * sanitizeArabic('اَلسَّلَامُ عَلَيْكُمْ', 'search'); // 'السلام عليكم'
+ *
+ * // Batch processing (optimized):
+ * sanitizeArabic(['text1', 'text2', 'text3'], 'search'); // ['result1', 'result2', 'result3']
  * ```
  */
-export const sanitizeArabic = (input: string, optionsOrPreset: SanitizePreset | SanitizeOptions = 'search'): string => {
+export function sanitizeArabic(input: string, optionsOrPreset?: SanitizePreset | SanitizeOptions): string;
+export function sanitizeArabic(input: string[], optionsOrPreset?: SanitizePreset | SanitizeOptions): string[];
+export function sanitizeArabic(
+    input: string | string[],
+    optionsOrPreset: SanitizePreset | SanitizeOptions = 'search',
+): string | string[] {
+    // Handle array input with optimized batch processing
+    if (Array.isArray(input)) {
+        if (input.length === 0) {
+            return [];
+        }
+
+        const resolved = resolveOptions(optionsOrPreset);
+
+        // Per-string processing using the optimized single-pass sanitizer
+        const results: string[] = new Array(input.length);
+
+        for (let i = 0; i < input.length; i++) {
+            results[i] = applySanitization(input[i], resolved);
+        }
+
+        return results;
+    }
+
+    // Single string: resolve options and apply
     if (!input) {
         return '';
     }
 
-    let preset: PresetOptions;
-    let opts: SanitizeOptions | null = null;
+    const resolved = resolveOptions(optionsOrPreset);
 
-    if (typeof optionsOrPreset === 'string') {
-        preset = PRESETS[optionsOrPreset];
-    } else {
-        const base = optionsOrPreset.base ?? 'light';
-        preset = base === 'none' ? PRESET_NONE : PRESETS[base];
-        opts = optionsOrPreset;
-    }
-
-    const nfc = resolveBoolean(preset.nfc, opts?.nfc);
-    const stripZW = resolveBoolean(preset.stripZeroWidth, opts?.stripZeroWidth);
-    const zwAsSpace = resolveBoolean(preset.zeroWidthToSpace, opts?.zeroWidthToSpace);
-    const removeDia = resolveBoolean(preset.stripDiacritics, opts?.stripDiacritics);
-    const removeFootnotes = resolveBoolean(preset.stripFootnotes, opts?.stripFootnotes);
-    const normAlif = resolveBoolean(preset.normalizeAlif, opts?.normalizeAlif);
-    const maqToYa = resolveBoolean(preset.replaceAlifMaqsurah, opts?.replaceAlifMaqsurah);
-    const taToHa = resolveBoolean(preset.replaceTaMarbutahWithHa, opts?.replaceTaMarbutahWithHa);
-    const stripNoise = resolveBoolean(preset.stripLatinAndSymbols, opts?.stripLatinAndSymbols);
-    const lettersSpacesOnly = resolveBoolean(preset.lettersAndSpacesOnly, opts?.lettersAndSpacesOnly);
-    const lettersOnly = resolveBoolean(preset.keepOnlyArabicLetters, opts?.keepOnlyArabicLetters);
-    const collapseWS = resolveBoolean(preset.collapseWhitespace, opts?.collapseWhitespace);
-    const doTrim = resolveBoolean(preset.trim, opts?.trim);
-    const removeHijri = resolveBoolean(preset.removeHijriMarker, opts?.removeHijriMarker);
-    const tatweelMode = resolveTatweelMode(preset.stripTatweel, opts?.stripTatweel);
-
-    let s = input;
-    s = applyNfcNormalization(s, nfc);
-    s = removeZeroWidthControls(s, stripZW, zwAsSpace);
-    if (removeHijri) {
-        s = removeHijriDateMarker(s);
-    }
-    s = removeDiacriticsAndTatweel(s, removeDia, tatweelMode);
-    s = applyCharacterMappings(s, normAlif, maqToYa, taToHa);
-
-    if (removeFootnotes) {
-        s = removeFootnoteReferencesSimple(s);
-        s = removeSingleDigitFootnoteReferences(s);
-    }
-
-    if (!lettersSpacesOnly) {
-        s = removeLatinAndSymbolNoise(s, stripNoise);
-    }
-    s = applyLetterFilters(s, lettersSpacesOnly, lettersOnly);
-
-    s = normalizeWhitespace(s, collapseWS, doTrim);
-
-    return s;
-};
+    return applySanitization(input, resolved);
+}

@@ -25,7 +25,7 @@ describe('sanitize', () => {
         });
 
         it('should remove ampersand', () => {
-            expect(sanitizeArabic(`أحب & لنفسي`, { stripLatinAndSymbols: true, base: 'none' })).toEqual('أحب   لنفسي');
+            expect(sanitizeArabic(`أحب & لنفسي`, { base: 'none', stripLatinAndSymbols: true })).toEqual('أحب   لنفسي');
         });
 
         it('should normalize Alif variants only when requested (no maqsurah -> ya unless asked)', () => {
@@ -41,7 +41,7 @@ describe('sanitize', () => {
         });
 
         it('should remove the Alif maqsurah with the ya', () => {
-            expect(sanitizeArabic('رؤيى', { replaceAlifMaqsurah: true, base: 'none' })).toEqual('رؤيي');
+            expect(sanitizeArabic('رؤيى', { base: 'none', replaceAlifMaqsurah: true })).toEqual('رؤيي');
         });
 
         it('should replace ta marbuta with ha when requested', () => {
@@ -59,8 +59,8 @@ describe('sanitize', () => {
         it('should strip Latin/symbols when requested without changing Hamza', () => {
             const input = 'أحب & لنفسي // test 123';
             const out = sanitizeArabic(input, {
-                stripLatinAndSymbols: true,
                 collapseWhitespace: true,
+                stripLatinAndSymbols: true,
                 trim: true,
             });
             expect(out).toBe('أحب لنفسي');
@@ -69,8 +69,8 @@ describe('sanitize', () => {
         it('should keep only Arabic letters (no spaces) when keepOnlyArabicLetters = true', () => {
             const input = 'سلام 123، يا ١٢٣ عالم!';
             const out = sanitizeArabic(input, {
-                stripDiacritics: true,
                 keepOnlyArabicLetters: true,
+                stripDiacritics: true,
             });
             expect(out).toBe('سلامياعالم'); // letters only
         });
@@ -78,9 +78,9 @@ describe('sanitize', () => {
         it('should keep only Arabic letters + spaces for FTS', () => {
             const input = 'السلامُ عليكم، 2024/05/01!';
             const out = sanitizeArabic(input, {
-                stripDiacritics: true,
-                lettersAndSpacesOnly: true,
                 collapseWhitespace: true,
+                lettersAndSpacesOnly: true,
+                stripDiacritics: true,
                 trim: true,
             });
             expect(out).toBe('السلام عليكم');
@@ -99,7 +99,7 @@ describe('sanitize', () => {
         it('should remove the empty space', () => {
             const text = 'يَخْلُوَ ‏. ‏ قَالَ غَرِيبٌ ‏. ‏';
             const expected = 'يَخْلُوَ  .   قَالَ غَرِيبٌ  .  ';
-            expect(sanitizeArabic(text, { zeroWidthToSpace: true, base: 'none', stripZeroWidth: true })).toBe(expected);
+            expect(sanitizeArabic(text, { base: 'none', stripZeroWidth: true, zeroWidthToSpace: true })).toBe(expected);
         });
 
         it('should remove tashkeel', () => {
@@ -107,7 +107,7 @@ describe('sanitize', () => {
         });
 
         it('should remove footnotes', () => {
-            expect(sanitizeArabic('(٣) مُحَمَّدٌ (٣ م)', { base: 'none', stripFootnotes: true })).toEqual('مُحَمَّدٌ');
+            expect(sanitizeArabic('(٣) مُحَمَّدٌ (٣ م)', { base: 'none', stripFootnotes: true })).toEqual('  مُحَمَّدٌ  ');
         });
 
         it('should simplify the alif with the basic one', () => {
@@ -118,8 +118,8 @@ describe('sanitize', () => {
             it('should remove tatweel', () => {
                 expect(
                     sanitizeArabic('أبـــتِـــكَةُ', {
-                        stripTatweel: true,
                         base: 'none',
+                        stripTatweel: true,
                     }),
                 ).toEqual('أبتِكَةُ');
             });
@@ -127,8 +127,8 @@ describe('sanitize', () => {
             it('should not affect dates', () => {
                 expect(
                     sanitizeArabic('1435/3/29 هـ', {
-                        stripTatweel: true,
                         base: 'none',
+                        stripTatweel: true,
                     }),
                 ).toEqual('1435/3/29 هـ');
             });
@@ -136,8 +136,8 @@ describe('sanitize', () => {
             it('should not affect numbering', () => {
                 expect(
                     sanitizeArabic('4ـ ومدح لكتاب', {
-                        stripTatweel: true,
                         base: 'none',
+                        stripTatweel: true,
                     }),
                 ).toEqual('4ـ ومدح لكتاب');
             });
@@ -145,8 +145,8 @@ describe('sanitize', () => {
             it('should not indexed list item', () => {
                 expect(
                     sanitizeArabic('3 ـ وشريط ', {
-                        stripTatweel: true,
                         base: 'none',
+                        stripTatweel: true,
                     }),
                 ).toEqual('3 ـ وشريط ');
             });

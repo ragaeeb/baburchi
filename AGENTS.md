@@ -6,11 +6,14 @@ Welcome to **baburchi**, a Bun-first TypeScript library that fixes OCR typos and
 
 - `src/` – library source files. Core entry point is `src/index.ts`, which re-exports helpers from:
   - `src/alignment.ts` for paragraph alignment utilities.
+  - `src/balance.ts` for bracket/quote balancing utilities.
   - `src/footnotes.ts` for detecting footnotes/endnotes.
   - `src/fuzzy.ts` for fuzzy string helpers.
+  - `src/noise.ts` for Arabic-aware OCR noise detection heuristics.
+  - `src/types.ts` for shared public types.
   - `src/typos.ts` for typo correction primitives plus accompanying tests in `src/typos.test.ts`.
   - `src/utils/` for shared helpers such as `sanitize.ts` (input cleanup) and `similarity.ts` (scoring).
-- `tsdown.config.mjs` – bundler configuration consumed by tsdown.
+- `tsdown.config.ts` – bundler configuration consumed by tsdown.
 - `tsconfig*.json` – TypeScript base config plus `tsconfig.build.json` for declaration-only builds.
 - `biome.json` – Biome formatter/linter configuration.
 - `README.md` – user-facing documentation. Update it whenever you add or change public APIs.
@@ -21,6 +24,7 @@ Welcome to **baburchi**, a Bun-first TypeScript library that fixes OCR typos and
 - Build artifacts via `bun run build`, which invokes the upstream `tsdown` CLI defined in `devDependencies`. Never check `dist/` into git.
 - Run `bun update --latest` when asked to refresh dependencies; commit resulting `bun.lock` changes.
 - Lint with `bun run lint` (Biome) to keep formatting and diagnostics consistent.
+- Performance micro-benchmarks live alongside the implementation, e.g. `src/utils/sanitize.perf.test.ts` (run with `bun test src/utils/sanitize.perf.test.ts`).
 
 ## Coding conventions
 

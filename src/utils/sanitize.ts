@@ -384,7 +384,7 @@ const applySanitization = (input: string, options: ResolvedOptions): string => {
                     lastWasSpace = true;
                 }
             } else {
-                buffer[bufIdx++] = CHAR_SPACE; // Normalize to space
+                buffer[bufIdx++] = code; // Keep original whitespace
                 lastWasSpace = false;
             }
             continue;

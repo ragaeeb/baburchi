@@ -34,6 +34,13 @@ describe('sanitize', () => {
             expect(out).toBe('انا الى الافاق'); // ى remains ى
         });
 
+        it('should not collapse the line breaks', () => {
+            const input = `أنا\nأنا\rأنا`;
+            const out = sanitizeArabic(input, { base: 'none', stripTatweel: true, stripZeroWidth: true });
+
+            expect(out).toBe(input);
+        });
+
         it('should replace alif maqsurah with ya', () => {
             const input = 'على رؤى';
             const out = sanitizeArabic(input, { replaceAlifMaqsurah: true, stripDiacritics: true });

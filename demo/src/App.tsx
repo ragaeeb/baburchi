@@ -21,6 +21,8 @@ import {
     handleFootnoteFusion,
     handleFootnoteSelection,
     handleStandaloneFootnotes,
+    hasExcessiveRepetition,
+    hasInvalidFootnotes,
     isArabicTextNoise,
     isBalanced,
     isBasicNoisePattern,
@@ -605,7 +607,6 @@ function App() {
                         and surface noisy artifacts using alignment algorithms, configurable sanitizers, and rich text
                         utilities.
                     </p>
-                    <p class="hero__meta">Maintained by {author}.</p>
                 </header>
 
                 <section class="panel">

@@ -14,6 +14,10 @@
 
 A lightweight TypeScript library for intelligent OCR text post-processing, specializing in Arabic text with advanced typo correction using sequence alignment algorithms and comprehensive noise detection.
 
+## Demo
+
+Explore the interactive demo at https://baburchi.surge.sh to browse each exported helper, try Arabic-aware examples, and see formatting results in real time. The demo build ships with a `public/CNAME` file to keep the Surge domain in sync with deployments.
+
 ## Features
 
 - 🧠 **Sequence-Aware Typo Repair** &mdash; Needleman–Wunsch alignment with typo symbol preservation and duplicate pruning.

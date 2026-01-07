@@ -1,28 +1,50 @@
-## Usage
+# baburchi demo
+
+A minimal Solid + Vite experience for exploring every exported function in the **baburchi** OCR post-processing library.
+The interface provides a sidebar for each API, pre-filled examples, and a one-click "Format" action to see results.
+
+**Live demo:** https://baburchi.surge.sh
+
+## What this demo showcases
+
+- A complete function explorer covering all baburchi exports.
+- Arabic-aware examples with right-to-left input where appropriate.
+- Instant formatting output powered by the library APIs.
+
+## Requirements
+
+- [Bun](https://bun.sh/) 1.2+ (preferred package manager)
+
+## Local development
 
 ```bash
-$ npm install # or pnpm install or yarn install
+bun install
+bun run dev
 ```
 
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
+Open http://localhost:5173 to view the app.
 
-## Available Scripts
+## Build for production
 
-In the project directory, you can run:
+```bash
+bun run build
+```
 
-### `npm run dev`
+The static site is generated in `dist/`.
 
-Runs the app in the development mode.<br>
-Open [http://localhost:5173](http://localhost:5173) to view it in the browser.
+## Preview the production build
 
-### `npm run build`
+```bash
+bun run preview
+```
 
-Builds the app for production to the `dist` folder.<br>
-It correctly bundles Solid in production mode and optimizes the build for the best performance.
+## Linting
 
-The build is minified and the filenames include the hashes.<br>
-Your app is ready to be deployed!
+```bash
+bun run lint
+```
 
 ## Deployment
 
-Learn more about deploying your application with the [documentations](https://vite.dev/guide/static-deploy.html)
+This demo is deployed with [Surge](https://surge.sh) at https://baburchi.surge.sh.
+The `public/CNAME` file ensures the correct domain is used during deployment.

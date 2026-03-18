@@ -5,13 +5,18 @@ on:
         branches:
             - main
 
+# Least-privilege default for the workflow; job overrides as needed
+permissions:
+  contents: read
+
 jobs:
     semantic-release:
         runs-on: ubuntu-latest
         permissions:
             contents: write
             issues: write
-            pull-requests: none
+            pull-requests: write
+            id-token: write
         steps:
             - uses: actions/checkout@v6
               with:

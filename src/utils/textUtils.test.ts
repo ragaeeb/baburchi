@@ -183,10 +183,10 @@ describe('textUtils', () => {
 
         it('should handle different spacing patterns with Arabic letter suffix', () => {
             const testCases = [
-                { input: '(٣ م)', expected: '' },
-                { input: '(٣  ه)', expected: '' },
-                { input: '(٣   ب)', expected: '' },
-                { input: 'نص (٣ م) هنا', expected: 'نص هنا' },
+                { expected: '', input: '(٣ م)' },
+                { expected: '', input: '(٣  ه)' },
+                { expected: '', input: '(٣   ب)' },
+                { expected: 'نص هنا', input: 'نص (٣ م) هنا' },
             ];
 
             testCases.forEach(({ input, expected }) => {

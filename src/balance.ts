@@ -65,7 +65,7 @@ const checkQuoteBalance = (str: string): BalanceResult => {
 };
 
 /** Mapping of opening brackets to their corresponding closing brackets */
-export const BRACKETS = { '«': '»', '(': ')', '[': ']', '{': '}' };
+export const BRACKETS = { '(': ')', '[': ']', '{': '}', '«': '»' };
 
 /** Set of all opening bracket characters */
 export const OPEN_BRACKETS = new Set(['«', '(', '[', '{']);

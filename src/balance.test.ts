@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 
-import { checkBalance, CLOSE_BRACKETS, getUnbalancedErrors, isBalanced, OPEN_BRACKETS } from './balance';
+import { CLOSE_BRACKETS, checkBalance, getUnbalancedErrors, isBalanced, OPEN_BRACKETS } from './balance';
 
 describe('balance', () => {
     describe('OPEN_BRACKETS constant', () => {

@@ -210,6 +210,27 @@ Unified Arabic text sanitizer that provides fast, configurable cleanup for Arabi
 - `"search"`: Tolerant search normalization (removes diacritics, normalizes letters)
 - `"aggressive"`: Indexing-friendly (letters and spaces only, removes everything else)
 
+#### `sanitizeQuranForSearch(input)`
+
+Qur'an-oriented search normalization for cases where generic Arabic FTS cleanup is too destructive.
+
+This helper is intentionally narrower than the generic `"search"` preset:
+
+- normalizes alif wasla (`ٱ`) to bare alif
+- expands dagger alif where the imla'i form needs a real alif
+- preserves standard hamza letters such as `أ`, `إ`, and `ء`
+- preserves alif maqsurah unless a Qur'anic orthography fix requires otherwise
+- strips diacritics, tatweel, zero-width controls, and non-letter noise
+
+Example:
+
+```typescript
+import { sanitizeQuranForSearch } from 'baburchi';
+
+sanitizeQuranForSearch('ذَٰلِكَ ٱلْكِتَٰبُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى لِّلْمُتَّقِينَ');
+// → 'ذلك الكتاب لا ريب فيه هدى للمتقين'
+```
+
 **Batch processing / factory:**
 
 - Pass an array to resolve options once and sanitize many strings efficiently.

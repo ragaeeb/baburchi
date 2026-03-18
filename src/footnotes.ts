@@ -48,9 +48,9 @@ const numberToArabic = (num: number): string => {
  */
 const ocrToArabic = (char: string): string => {
     const ocrToArabicMap: { [key: string]: string } = {
+        '.': '٠',
         '1': '١',
         '9': '٩',
-        '.': '٠',
         O: '٥',
         o: '٥',
         V: '٧',

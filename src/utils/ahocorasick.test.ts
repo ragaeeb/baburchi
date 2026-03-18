@@ -7,10 +7,10 @@ describe('AhoCorasick', () => {
         const matches: Array<{ patternId: number; endPos: number }> = [];
 
         ac.find('hello world', (patternId, endPos) => {
-            matches.push({ patternId, endPos });
+            matches.push({ endPos, patternId });
         });
 
-        expect(matches).toEqual([{ patternId: 0, endPos: 5 }]);
+        expect(matches).toEqual([{ endPos: 5, patternId: 0 }]);
     });
 
     it('should find multiple patterns in text', () => {
@@ -18,7 +18,7 @@ describe('AhoCorasick', () => {
         const matches: Array<{ patternId: number; endPos: number }> = [];
 
         ac.find('ushers', (patternId, endPos) => {
-            matches.push({ patternId, endPos });
+            matches.push({ endPos, patternId });
         });
 
         expect(matches.length).toBeGreaterThan(0);
@@ -30,7 +30,7 @@ describe('AhoCorasick', () => {
         const matches: Array<{ patternId: number; endPos: number }> = [];
 
         ac.find('abcde', (patternId, endPos) => {
-            matches.push({ patternId, endPos });
+            matches.push({ endPos, patternId });
         });
 
         expect(matches).toHaveLength(3);
@@ -42,10 +42,10 @@ describe('AhoCorasick', () => {
         const matches: Array<{ patternId: number; endPos: number }> = [];
 
         ac.find('test', (patternId, endPos) => {
-            matches.push({ patternId, endPos });
+            matches.push({ endPos, patternId });
         });
 
-        expect(matches).toEqual([{ patternId: 1, endPos: 4 }]);
+        expect(matches).toEqual([{ endPos: 4, patternId: 1 }]);
     });
 
     it('should handle patterns not found in text', () => {
@@ -53,7 +53,7 @@ describe('AhoCorasick', () => {
         const matches: Array<{ patternId: number; endPos: number }> = [];
 
         ac.find('hello world', (patternId, endPos) => {
-            matches.push({ patternId, endPos });
+            matches.push({ endPos, patternId });
         });
 
         expect(matches).toHaveLength(0);
@@ -64,7 +64,7 @@ describe('AhoCorasick', () => {
         const matches: Array<{ patternId: number; endPos: number }> = [];
 
         ac.find('', (patternId, endPos) => {
-            matches.push({ patternId, endPos });
+            matches.push({ endPos, patternId });
         });
 
         expect(matches).toHaveLength(0);
@@ -75,7 +75,7 @@ describe('AhoCorasick', () => {
         const matches: Array<{ patternId: number; endPos: number }> = [];
 
         ac.find('abc', (patternId, endPos) => {
-            matches.push({ patternId, endPos });
+            matches.push({ endPos, patternId });
         });
 
         expect(matches).toHaveLength(3);
@@ -91,7 +91,7 @@ describe('AhoCorasick', () => {
         const matches: Array<{ patternId: number; endPos: number }> = [];
 
         ac.find('testing', (patternId, endPos) => {
-            matches.push({ patternId, endPos });
+            matches.push({ endPos, patternId });
         });
 
         expect(matches).toHaveLength(2); // Both 'test' patterns should match
@@ -103,7 +103,7 @@ describe('AhoCorasick', () => {
         const matches: Array<{ patternId: number; endPos: number }> = [];
 
         ac.find('sting', (patternId, endPos) => {
-            matches.push({ patternId, endPos });
+            matches.push({ endPos, patternId });
         });
 
         expect(matches.length).toBeGreaterThan(1);

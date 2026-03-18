@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { sanitizeArabic } from './sanitize';
+import { sanitizeArabic, sanitizeQuranForSearch } from './sanitize';
 
 describe('sanitize', () => {
     describe('sanitizeArabic', () => {
@@ -157,6 +157,27 @@ describe('sanitize', () => {
                     }),
                 ).toEqual('3 ـ وشريط ');
             });
+        });
+    });
+
+    describe('sanitizeQuranForSearch', () => {
+        it('normalizes a Quran sample closer to the expected searchable surface', () => {
+            const input = 'ذَٰلِكَ ٱلْكِتَٰبُ لَا رَيْبَ ۛ فِيهِ ۛ هُدًى لِّلْمُتَّقِينَ';
+            expect(sanitizeQuranForSearch(input)).toBe('ذلك الكتاب لا ريب فيه هدى للمتقين');
+        });
+
+        it('preserves standard hamza forms while normalizing wasla and dagger alif', () => {
+            const input =
+                'يَكَادُ ٱلْبَرْقُ يَخْطَفُ أَبْصَٰرَهُمْ ۖ كُلَّمَآ أَضَآءَ لَهُم مَّشَوْا۟ فِيهِ وَإِذَآ أَظْلَمَ عَلَيْهِمْ قَامُوا۟ ۚ وَلَوْ شَآءَ ٱللَّهُ لَذَهَبَ بِسَمْعِهِمْ وَأَبْصَٰرِهِمْ ۚ إِنَّ ٱللَّهُ عَلَىٰ كُلِّ شَىْءٍ قَدِيرٌ';
+            expect(sanitizeQuranForSearch(input)).toBe(
+                'يكاد البرق يخطف أبصارهم كلما أضاء لهم مشوا فيه وإذا أظلم عليهم قاموا ولو شاء الله لذهب بسمعهم وأبصارهم إن الله على كل شيء قدير',
+            );
+        });
+
+        it('handles common Quran-only orthography cases without flattening hamza and alif maqsurah', () => {
+            expect(sanitizeQuranForSearch('بِهَٰذَا')).toBe('بهذا');
+            expect(sanitizeQuranForSearch('ٱلْفَٰسِقِينَ')).toBe('الفاسقين');
+            expect(sanitizeQuranForSearch('عَلَىٰ')).toBe('على');
         });
     });
 });

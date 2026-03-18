@@ -207,6 +207,7 @@ const CHAR_TA_MARBUTAH = 0x0629;
 const CHAR_MADDA_ABOVE = 0x0653;
 const CHAR_HAMZA_ABOVE_MARK = 0x0654;
 const CHAR_HAMZA_BELOW_MARK = 0x0655;
+const CHAR_DAGGER_ALIF = 0x0670;
 
 // Shared resources to avoid allocations
 let sharedBuffer = new Uint16Array(2048); // Start with 2KB (enough for ~1000 chars)
@@ -217,7 +218,7 @@ const isDiacritic = (code: number): boolean => {
     return (
         (code >= 0x064b && code <= 0x065f) ||
         (code >= 0x0610 && code <= 0x061a) ||
-        code === 0x0670 ||
+        code === CHAR_DAGGER_ALIF ||
         (code >= 0x06d6 && code <= 0x06ed)
     );
 };
@@ -308,9 +309,407 @@ const resolveTatweelMode = (
 };
 
 /**
- * Internal sanitization logic that applies all transformations to a single string.
- * Uses single-pass character transformation for maximum performance when possible.
- * This function assumes all options have been pre-resolved for maximum performance.
+ * Mutable loop state threaded through step handlers.
+ * Allocated once per {@link applySanitization} call; fields mutated in place.
+ */
+type SanitizeContext = {
+    /** Shared output buffer (reference to the module-level {@link sharedBuffer}). */
+    buffer: Uint16Array;
+    /** Source string. */
+    text: string;
+    /** `text.length`, cached to avoid repeated property access. */
+    len: number;
+    /** Next write position in `buffer`. */
+    bufIdx: number;
+    /** Whether the last emitted character was a space (for collapse logic). */
+    lastWasSpace: boolean;
+    /**
+     * Current loop index. Handlers that perform lookahead (hijri marker, noise,
+     * footnotes) advance this so the outer loop can skip consumed characters.
+     */
+    i: number;
+};
+
+/**
+ * Emits a single space into the output buffer, respecting the collapse-whitespace flag.
+ *
+ * @param ctx - Mutable loop state; `bufIdx` and `lastWasSpace` may be updated.
+ * @param collapseWS - When true, suppress consecutive spaces and leading spaces.
+ */
+const emitSpace = (ctx: SanitizeContext, collapseWS: boolean): void => {
+    if (collapseWS) {
+        if (!ctx.lastWasSpace && ctx.bufIdx > 0) {
+            ctx.buffer[ctx.bufIdx++] = CHAR_SPACE;
+            ctx.lastWasSpace = true;
+        }
+    } else {
+        ctx.buffer[ctx.bufIdx++] = CHAR_SPACE;
+        ctx.lastWasSpace = false;
+    }
+};
+
+/**
+ * Applies letter-level normalization to a single code point:
+ * alif variants → bare alif, alif maqsurah → ya, ta marbutah → ha.
+ *
+ * @param code - Input code point.
+ * @param normAlif - Whether to collapse alif variants.
+ * @param maqToYa - Whether to replace ى with ي.
+ * @param taToHa - Whether to replace ة with ه.
+ * @returns The (possibly mapped) output code point.
+ */
+const normalizeCode = (code: number, normAlif: boolean, maqToYa: boolean, taToHa: boolean): number => {
+    let out = code;
+    if (normAlif) {
+        if (
+            code === CHAR_ALIF_MADDA ||
+            code === CHAR_ALIF_HAMZA_ABOVE ||
+            code === CHAR_ALIF_HAMZA_BELOW ||
+            code === CHAR_ALIF_WASLA
+        ) {
+            out = CHAR_ALIF;
+        }
+    }
+    if (maqToYa && code === CHAR_ALIF_MAQSURAH) {
+        out = CHAR_YA;
+    }
+    if (taToHa && code === CHAR_TA_MARBUTAH) {
+        out = CHAR_HA;
+    }
+    return out;
+};
+
+// ---------------------------------------------------------------------------
+// Step handlers — each returns true when the character has been consumed
+// (i.e. the outer loop should `continue`), false to let processing fall through.
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles ASCII and control whitespace (code ≤ 32).
+ * Returns `false` for non-whitespace characters.
+ */
+const processWhitespace = (code: number, ctx: SanitizeContext, opts: ResolvedOptions): boolean => {
+    if (code > 32) {
+        return false;
+    }
+    if (opts.lettersOnly) {
+        return true; // drop silently
+    }
+    if (opts.collapseWS) {
+        if (!ctx.lastWasSpace && ctx.bufIdx > 0) {
+            ctx.buffer[ctx.bufIdx++] = CHAR_SPACE;
+            ctx.lastWasSpace = true;
+        }
+    } else {
+        ctx.buffer[ctx.bufIdx++] = code; // preserve original whitespace (e.g. newlines)
+        ctx.lastWasSpace = false;
+    }
+    return true;
+};
+
+/**
+ * Performs inline NFC canonical composition for Arabic combining marks.
+ * Only handles the five compositions relevant to Arabic OCR:
+ *   ا + ◌ٓ → آ,  ا + ◌ٔ → أ,  ا + ◌ٕ → إ,  و + ◌ٔ → ؤ,  ي + ◌ٔ → ئ
+ *
+ * Called only when `nfc` is enabled. Returns `false` when the mark cannot be
+ * composed (it will then be emitted as a standalone character by the fallthrough).
+ */
+const processNfc = (code: number, ctx: SanitizeContext): boolean => {
+    if (code !== CHAR_MADDA_ABOVE && code !== CHAR_HAMZA_ABOVE_MARK && code !== CHAR_HAMZA_BELOW_MARK) {
+        return false;
+    }
+    const prevIdx = ctx.bufIdx - 1;
+    if (prevIdx < 0) {
+        return false;
+    }
+
+    const prev = ctx.buffer[prevIdx];
+    let composed = 0;
+
+    if (prev === CHAR_ALIF) {
+        if (code === CHAR_MADDA_ABOVE) {
+            composed = CHAR_ALIF_MADDA;
+        } else if (code === CHAR_HAMZA_ABOVE_MARK) {
+            composed = CHAR_ALIF_HAMZA_ABOVE;
+        } else {
+            composed = CHAR_ALIF_HAMZA_BELOW; // CHAR_HAMZA_BELOW_MARK
+        }
+    } else if (code === CHAR_HAMZA_ABOVE_MARK) {
+        // Only hamza-above composes with WAW and YEH in NFC
+        if (prev === CHAR_WAW) {
+            composed = CHAR_WAW_HAMZA_ABOVE;
+        } else if (prev === CHAR_YA) {
+            composed = CHAR_YEH_HAMZA_ABOVE;
+        }
+    }
+
+    if (composed === 0) {
+        return false;
+    }
+    ctx.buffer[prevIdx] = composed;
+    return true;
+};
+
+/**
+ * Strips zero-width controls (U+200B–U+FEFF range).
+ * When `zwAsSpace` is set, emits a space in place of the removed character.
+ * Called only when `stripZW` is enabled.
+ */
+const processZeroWidth = (code: number, ctx: SanitizeContext, opts: ResolvedOptions): boolean => {
+    if (!isZeroWidth(code)) {
+        return false;
+    }
+    if (opts.zwAsSpace) {
+        emitSpace(ctx, opts.collapseWS);
+    }
+    return true;
+};
+
+/**
+ * Removes the Hijri date marker "هـ" (or bare "ه" when tatweel has already been
+ * stripped) when it immediately follows a date-like token (digits/slashes/hyphens).
+ *
+ * May advance `ctx.i` by one to also consume an attached tatweel.
+ * Called only when `removeHijri` is enabled.
+ */
+const processHijriMarker = (code: number, ctx: SanitizeContext, opts: ResolvedOptions): boolean => {
+    if (code !== CHAR_HA) {
+        return false;
+    }
+
+    const { text, len } = ctx;
+    const origI = ctx.i;
+    let nextIdx = origI + 1;
+    const hasTatweel = nextIdx < len && text.charCodeAt(nextIdx) === CHAR_TATWEEL;
+    if (hasTatweel) {
+        nextIdx++;
+    }
+
+    // The marker must appear at a word boundary (end of string or followed by space/separator)
+    let isBoundary = nextIdx >= len;
+    if (!isBoundary) {
+        const nextCode = text.charCodeAt(nextIdx);
+        isBoundary = nextCode <= 32 || isSymbol(nextCode) || nextCode === 47 || nextCode === 45;
+    }
+    if (!isBoundary) {
+        return false;
+    }
+
+    // Only suppress if the preceding non-space character is a digit
+    let backIdx = origI - 1;
+    while (backIdx >= 0 && (text.charCodeAt(backIdx) <= 32 || isZeroWidth(text.charCodeAt(backIdx)))) {
+        backIdx--;
+    }
+    if (backIdx < 0 || !isDigit(text.charCodeAt(backIdx))) {
+        return false;
+    }
+
+    if (hasTatweel) {
+        ctx.i = origI + 1; // outer loop's i++ will clear the tatweel position
+    }
+    return true;
+};
+
+/**
+ * Strips tatweel (ـ U+0640) according to the resolved mode.
+ *
+ * - `'all'`: always remove.
+ * - `'safe'`: remove unless immediately preceded by a digit or ه
+ *   (preserves date suffixes like "هـ" and list markers like "4ـ").
+ *
+ * Called only when `tatweelMode !== false`.
+ */
+const processTatweel = (code: number, ctx: SanitizeContext, tatweelMode: 'safe' | 'all'): boolean => {
+    if (code !== CHAR_TATWEEL) {
+        return false;
+    }
+    if (tatweelMode === 'all') {
+        return true;
+    }
+
+    // 'safe': scan back through spaces to find the previous non-space output character
+    let backIdx = ctx.bufIdx - 1;
+    while (backIdx >= 0 && ctx.buffer[backIdx] === CHAR_SPACE) {
+        backIdx--;
+    }
+    if (backIdx < 0) {
+        return true; // nothing before it — drop
+    }
+
+    const prev = ctx.buffer[backIdx];
+    return !(isDigit(prev) || prev === CHAR_HA); // keep when after digit/ha, drop otherwise
+};
+
+/**
+ * Replaces Latin letters, Western digits, and recognised symbols with a space.
+ * Also collapses runs of double-slashes ("//") common in URLs.
+ *
+ * Called only when `stripNoise` is enabled and letter-filtering is not already
+ * handling cleanup (`lettersSpacesOnly` / `lettersOnly` take care of it themselves).
+ *
+ * May advance `ctx.i` to consume a run of slashes.
+ */
+const processNoise = (code: number, ctx: SanitizeContext, opts: ResolvedOptions): boolean => {
+    if (opts.lettersSpacesOnly || opts.lettersOnly) {
+        return false;
+    }
+
+    if (isLatinOrDigit(code) || isSymbol(code)) {
+        emitSpace(ctx, opts.collapseWS);
+        return true;
+    }
+
+    // Collapse "//" (URL noise)
+    if (code === 47 && ctx.i + 1 < ctx.len && ctx.text.charCodeAt(ctx.i + 1) === 47) {
+        while (ctx.i + 1 < ctx.len && ctx.text.charCodeAt(ctx.i + 1) === 47) {
+            ctx.i++;
+        }
+        emitSpace(ctx, opts.collapseWS);
+        return true;
+    }
+
+    return false;
+};
+
+/**
+ * Matches footnote pattern 1: `(¬٣)` or `(¬٣ )` — a negation sign followed by
+ * Arabic-Indic digits and an optional space before the closing parenthesis.
+ *
+ * @param text - Full source string.
+ * @param len - Length of `text`.
+ * @param startPos - Index of the first character **after** ¬.
+ * @returns Index of the closing `)` on match, or -1 on no match.
+ */
+const matchFootnotePattern1 = (text: string, len: number, startPos: number): number => {
+    let pos = startPos;
+    let hasDigits = false;
+    while (pos < len && text.charCodeAt(pos) >= 0x0660 && text.charCodeAt(pos) <= 0x0669) {
+        hasDigits = true;
+        pos++;
+    }
+    if (!hasDigits || pos >= len) {
+        return -1;
+    }
+
+    const closing = text.charCodeAt(pos);
+    if (closing === 41) {
+        return pos; // `)`
+    }
+    if (closing === CHAR_SPACE && pos + 1 < len && text.charCodeAt(pos + 1) === 41) {
+        return pos + 1;
+    }
+    return -1;
+};
+
+/**
+ * Matches footnote pattern 2: `(٣)` or `(٣ X)` — a single Arabic-Indic digit,
+ * optionally followed by a space and one Arabic letter, then a closing parenthesis.
+ *
+ * @param text - Full source string.
+ * @param len - Length of `text`.
+ * @param digitPos - Index of the Arabic-Indic digit character.
+ * @returns Index of the closing `)` on match, or -1 on no match.
+ */
+const matchFootnotePattern2 = (text: string, len: number, digitPos: number): number => {
+    const afterDigit = digitPos + 1;
+    if (afterDigit >= len) {
+        return -1;
+    }
+
+    const c2 = text.charCodeAt(afterDigit);
+    if (c2 === 41) {
+        return afterDigit; // `(٣)`
+    }
+
+    if (c2 !== CHAR_SPACE) {
+        return -1;
+    }
+    const afterSpace = afterDigit + 1;
+    if (afterSpace >= len) {
+        return -1;
+    }
+
+    const c3 = text.charCodeAt(afterSpace);
+    if (c3 < 0x0600 || c3 > 0x06ff) {
+        return -1; // must be an Arabic character
+    }
+
+    const closingIdx = afterSpace + 1;
+    if (closingIdx >= len || text.charCodeAt(closingIdx) !== 41) {
+        return -1;
+    }
+    return closingIdx; // `(٣ X)`
+};
+
+/**
+ * Removes inline footnote references of the form `(٣)`, `(٣ م)`, or `(¬٣)`.
+ * Replaces the entire token (including parens) with a single space.
+ *
+ * Called only when `removeFootnotes` is enabled and letter-filtering is inactive.
+ * May advance `ctx.i` past the consumed token.
+ */
+const processFootnote = (code: number, ctx: SanitizeContext, opts: ResolvedOptions): boolean => {
+    if (opts.lettersSpacesOnly || opts.lettersOnly || code !== 40) {
+        return false; // `(`
+    }
+
+    const { text, len } = ctx;
+    let nextIdx = ctx.i + 1;
+    if (nextIdx < len && text.charCodeAt(nextIdx) === CHAR_SPACE) {
+        nextIdx++;
+    }
+    if (nextIdx >= len) {
+        return false;
+    }
+
+    const c1 = text.charCodeAt(nextIdx);
+    let endIdx = -1;
+
+    if (c1 === 0x00ac) {
+        // Pattern 1: (¬digits)
+        endIdx = matchFootnotePattern1(text, len, nextIdx + 1);
+    } else if (c1 >= 0x0660 && c1 <= 0x0669) {
+        // Pattern 2: (digit) or (digit letter)
+        endIdx = matchFootnotePattern2(text, len, nextIdx);
+    }
+
+    if (endIdx < 0) {
+        return false;
+    }
+    ctx.i = endIdx; // outer loop's i++ will land past the closing ')'
+    emitSpace(ctx, opts.collapseWS);
+    return true;
+};
+
+/**
+ * Handles letter filtering for the `lettersSpacesOnly` / `lettersOnly` modes.
+ * Non-Arabic characters are either dropped (lettersOnly) or replaced with a space.
+ * Arabic letters are emitted after normalization.
+ *
+ * Returns `false` when neither mode is active, allowing the default emit to run.
+ */
+const processLetterFilter = (code: number, ctx: SanitizeContext, opts: ResolvedOptions): boolean => {
+    if (!opts.lettersSpacesOnly && !opts.lettersOnly) {
+        return false;
+    }
+
+    if (!isArabicLetter(code)) {
+        if (!opts.lettersOnly) {
+            emitSpace(ctx, opts.collapseWS); // lettersSpacesOnly: replace with space
+        }
+        return true; // lettersOnly: drop silently
+    }
+
+    ctx.buffer[ctx.bufIdx++] = normalizeCode(code, opts.normAlif, opts.maqToYa, opts.taToHa);
+    ctx.lastWasSpace = false;
+    return true;
+};
+
+/**
+ * Internal sanitization logic. Iterates once over the source string, dispatching
+ * each character through a series of focused step handlers. All options must be
+ * pre-resolved; no allocations occur beyond the context object and any buffer growth.
  */
 const applySanitization = (input: string, options: ResolvedOptions): string => {
     if (!input) {
@@ -320,48 +719,33 @@ const applySanitization = (input: string, options: ResolvedOptions): string => {
     const {
         nfc,
         stripZW,
-        zwAsSpace,
         removeHijri,
         removeDia,
         tatweelMode,
+        stripNoise,
+        removeFootnotes,
         normAlif,
         maqToYa,
         taToHa,
-        removeFootnotes,
-        lettersSpacesOnly,
-        stripNoise,
-        lettersOnly,
-        collapseWS,
         doTrim,
     } = options;
 
-    /**
-     * NFC Normalization (Fast Path)
-     *
-     * `String.prototype.normalize('NFC')` is extremely expensive under high throughput.
-     * For Arabic OCR text, the main canonical compositions we care about are:
-     * - ا + ◌ٓ (U+0653) → آ
-     * - ا + ◌ٔ (U+0654) → أ
-     * - ا + ◌ٕ (U+0655) → إ
-     * - و + ◌ٔ (U+0654) → ؤ
-     * - ي + ◌ٔ (U+0654) → ئ
-     *
-     * We implement these compositions inline during the main loop, avoiding full NFC
-     * normalization in the common case while preserving behavior needed by our sanitizer.
-     */
     const text = input;
     const len = text.length;
 
-    // Ensure shared buffer is large enough
     if (len > sharedBuffer.length) {
         sharedBuffer = new Uint16Array(len + 1024);
     }
-    const buffer = sharedBuffer;
-    let bufIdx = 0;
 
-    let lastWasSpace = false;
+    const ctx: SanitizeContext = {
+        buffer: sharedBuffer,
+        bufIdx: 0,
+        i: 0,
+        lastWasSpace: false,
+        len,
+        text,
+    };
 
-    // Skip leading whitespace if trimming
     let start = 0;
     if (doTrim) {
         while (start < len && text.charCodeAt(start) <= 32) {
@@ -370,352 +754,59 @@ const applySanitization = (input: string, options: ResolvedOptions): string => {
     }
 
     for (let i = start; i < len; i++) {
+        ctx.i = i;
         const code = text.charCodeAt(i);
 
-        // Whitespace handling
-        if (code <= 32) {
-            if (lettersOnly) {
-                continue; // Drop spaces if lettersOnly
-            }
-
-            if (collapseWS) {
-                if (!lastWasSpace && bufIdx > 0) {
-                    buffer[bufIdx++] = CHAR_SPACE;
-                    lastWasSpace = true;
-                }
-            } else {
-                buffer[bufIdx++] = code; // Keep original whitespace
-                lastWasSpace = false;
-            }
+        if (processWhitespace(code, ctx, options)) {
             continue;
         }
-
-        // NFC (subset) for Arabic canonical compositions: merge combining marks into previous output
-        if (nfc) {
-            if (code === CHAR_MADDA_ABOVE || code === CHAR_HAMZA_ABOVE_MARK || code === CHAR_HAMZA_BELOW_MARK) {
-                const prevIdx = bufIdx - 1;
-                if (prevIdx >= 0) {
-                    const prev = buffer[prevIdx];
-                    let composed = 0;
-
-                    if (prev === CHAR_ALIF) {
-                        if (code === CHAR_MADDA_ABOVE) {
-                            composed = CHAR_ALIF_MADDA;
-                        } else if (code === CHAR_HAMZA_ABOVE_MARK) {
-                            composed = CHAR_ALIF_HAMZA_ABOVE;
-                        } else {
-                            // CHAR_HAMZA_BELOW_MARK
-                            composed = CHAR_ALIF_HAMZA_BELOW;
-                        }
-                    } else if (code === CHAR_HAMZA_ABOVE_MARK) {
-                        // Only Hamza Above composes for WAW/YEH in NFC
-                        if (prev === CHAR_WAW) {
-                            composed = CHAR_WAW_HAMZA_ABOVE;
-                        } else if (prev === CHAR_YA) {
-                            composed = CHAR_YEH_HAMZA_ABOVE;
-                        }
-                    }
-
-                    if (composed !== 0) {
-                        buffer[prevIdx] = composed;
-                        continue;
-                    }
-                }
-            }
-        }
-
-        // Zero width
-        if (stripZW && isZeroWidth(code)) {
-            if (zwAsSpace) {
-                if (collapseWS) {
-                    if (!lastWasSpace && bufIdx > 0) {
-                        buffer[bufIdx++] = CHAR_SPACE;
-                        lastWasSpace = true;
-                    }
-                } else {
-                    buffer[bufIdx++] = CHAR_SPACE;
-                    lastWasSpace = false;
-                }
-            }
+        if (nfc && processNfc(code, ctx)) {
             continue;
         }
-
-        // Hijri Marker Removal (Must run before letter filtering removes digits)
-        if (removeHijri && code === CHAR_HA) {
-            let nextIdx = i + 1;
-            if (nextIdx < len && text.charCodeAt(nextIdx) === CHAR_TATWEEL) {
-                nextIdx++;
-            }
-
-            let isBoundary = false;
-            if (nextIdx >= len) {
-                isBoundary = true;
-            } else {
-                const nextCode = text.charCodeAt(nextIdx);
-                if (nextCode <= 32 || isSymbol(nextCode) || nextCode === 47 || nextCode === 45) {
-                    isBoundary = true;
-                }
-            }
-
-            if (isBoundary) {
-                let backIdx = i - 1;
-                while (backIdx >= 0) {
-                    const c = text.charCodeAt(backIdx);
-                    if (c <= 32 || isZeroWidth(c)) {
-                        backIdx--;
-                    } else {
-                        break;
-                    }
-                }
-                if (backIdx >= 0 && isDigit(text.charCodeAt(backIdx))) {
-                    if (nextIdx > i + 1) {
-                        i++;
-                    }
-                    continue;
-                }
-            }
+        if (stripZW && processZeroWidth(code, ctx, options)) {
+            continue;
         }
-
-        // Diacritics
+        if (removeHijri && processHijriMarker(code, ctx, options)) {
+            i = ctx.i;
+            continue;
+        }
         if (removeDia && isDiacritic(code)) {
             continue;
         }
-
-        // Tatweel
-        if (code === CHAR_TATWEEL) {
-            if (tatweelMode === 'all') {
-                continue;
-            }
-            if (tatweelMode === 'safe') {
-                let backIdx = bufIdx - 1;
-                while (backIdx >= 0 && buffer[backIdx] === CHAR_SPACE) {
-                    backIdx--;
-                }
-                if (backIdx >= 0) {
-                    const prev = buffer[backIdx];
-                    if (isDigit(prev) || prev === CHAR_HA) {
-                        // Keep it
-                    } else {
-                        continue; // Drop
-                    }
-                } else {
-                    continue; // Drop
-                }
-            }
+        if (tatweelMode !== false && processTatweel(code, ctx, tatweelMode)) {
+            continue;
         }
-
-        // Latin and Symbols (Skip if letter filtering will handle it)
-        if (stripNoise && !lettersSpacesOnly && !lettersOnly) {
-            if (isLatinOrDigit(code) || isSymbol(code)) {
-                if (collapseWS) {
-                    if (!lastWasSpace && bufIdx > 0) {
-                        buffer[bufIdx++] = CHAR_SPACE;
-                        lastWasSpace = true;
-                    }
-                } else {
-                    buffer[bufIdx++] = CHAR_SPACE;
-                    lastWasSpace = false;
-                }
-                continue;
-            }
-            // Double slash check //
-            if (code === 47 && i + 1 < len && text.charCodeAt(i + 1) === 47) {
-                while (i + 1 < len && text.charCodeAt(i + 1) === 47) {
-                    i++;
-                }
-                if (collapseWS) {
-                    if (!lastWasSpace && bufIdx > 0) {
-                        buffer[bufIdx++] = CHAR_SPACE;
-                        lastWasSpace = true;
-                    }
-                } else {
-                    buffer[bufIdx++] = CHAR_SPACE;
-                    lastWasSpace = false;
-                }
-                continue;
-            }
+        if (stripNoise && processNoise(code, ctx, options)) {
+            i = ctx.i;
+            continue;
         }
-
-        // Footnote Removal (Skip if letter filtering will handle it)
-        if (removeFootnotes && !lettersSpacesOnly && !lettersOnly && code === 40) {
-            // (
-            let nextIdx = i + 1;
-            if (nextIdx < len && text.charCodeAt(nextIdx) === CHAR_SPACE) {
-                nextIdx++;
-            }
-
-            if (nextIdx < len) {
-                const c1 = text.charCodeAt(nextIdx);
-
-                // Pattern 1: (¬123...)
-                if (c1 === 0x00ac) {
-                    // ¬
-                    nextIdx++;
-                    let hasDigits = false;
-                    while (nextIdx < len) {
-                        const c = text.charCodeAt(nextIdx);
-                        if (c >= 0x0660 && c <= 0x0669) {
-                            hasDigits = true;
-                            nextIdx++;
-                        } else {
-                            break;
-                        }
-                    }
-                    if (hasDigits && nextIdx < len) {
-                        if (text.charCodeAt(nextIdx) === 41) {
-                            // )
-                            i = nextIdx;
-                            if (collapseWS) {
-                                if (!lastWasSpace && bufIdx > 0) {
-                                    buffer[bufIdx++] = CHAR_SPACE;
-                                    lastWasSpace = true;
-                                }
-                            } else {
-                                buffer[bufIdx++] = CHAR_SPACE;
-                                lastWasSpace = false;
-                            }
-                            continue;
-                        }
-                        if (text.charCodeAt(nextIdx) === CHAR_SPACE) {
-                            nextIdx++;
-                            if (nextIdx < len && text.charCodeAt(nextIdx) === 41) {
-                                i = nextIdx;
-                                if (collapseWS) {
-                                    if (!lastWasSpace && bufIdx > 0) {
-                                        buffer[bufIdx++] = CHAR_SPACE;
-                                        lastWasSpace = true;
-                                    }
-                                } else {
-                                    buffer[bufIdx++] = CHAR_SPACE;
-                                    lastWasSpace = false;
-                                }
-                                continue;
-                            }
-                        }
-                    }
-                }
-
-                // Pattern 2: (1) or (1 X)
-                else if (c1 >= 0x0660 && c1 <= 0x0669) {
-                    let tempIdx = nextIdx + 1;
-                    let matched = false;
-
-                    if (tempIdx < len) {
-                        const c2 = text.charCodeAt(tempIdx);
-                        if (c2 === 41) {
-                            // )
-                            matched = true;
-                            tempIdx++;
-                        } else if (c2 === CHAR_SPACE) {
-                            // Space
-                            tempIdx++;
-                            if (tempIdx < len) {
-                                const c3 = text.charCodeAt(tempIdx);
-                                if (c3 >= 0x0600 && c3 <= 0x06ff) {
-                                    tempIdx++;
-                                    if (tempIdx < len && text.charCodeAt(tempIdx) === 41) {
-                                        matched = true;
-                                        tempIdx++;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (matched) {
-                        i = tempIdx - 1;
-                        if (collapseWS) {
-                            if (!lastWasSpace && bufIdx > 0) {
-                                buffer[bufIdx++] = CHAR_SPACE;
-                                lastWasSpace = true;
-                            }
-                        } else {
-                            buffer[bufIdx++] = CHAR_SPACE;
-                            lastWasSpace = false;
-                        }
-                        continue;
-                    }
-                }
-            }
+        if (removeFootnotes && processFootnote(code, ctx, options)) {
+            i = ctx.i;
+            continue;
         }
-
-        // Letter Filtering (Aggressive)
-        if (lettersSpacesOnly || lettersOnly) {
-            if (!isArabicLetter(code)) {
-                if (lettersOnly) {
-                    continue;
-                }
-                // lettersSpacesOnly -> replace with space
-                if (collapseWS) {
-                    if (!lastWasSpace && bufIdx > 0) {
-                        buffer[bufIdx++] = CHAR_SPACE;
-                        lastWasSpace = true;
-                    }
-                } else {
-                    buffer[bufIdx++] = CHAR_SPACE;
-                    lastWasSpace = false;
-                }
-                continue;
-            }
-
-            // Normalization logic duplicated for speed
-            let outCode = code;
-            if (normAlif) {
-                if (
-                    code === CHAR_ALIF_MADDA ||
-                    code === CHAR_ALIF_HAMZA_ABOVE ||
-                    code === CHAR_ALIF_HAMZA_BELOW ||
-                    code === CHAR_ALIF_WASLA
-                ) {
-                    outCode = CHAR_ALIF;
-                }
-            }
-            if (maqToYa && code === CHAR_ALIF_MAQSURAH) {
-                outCode = CHAR_YA;
-            }
-            if (taToHa && code === CHAR_TA_MARBUTAH) {
-                outCode = CHAR_HA;
-            }
-
-            buffer[bufIdx++] = outCode;
-            lastWasSpace = false;
+        if (processLetterFilter(code, ctx, options)) {
             continue;
         }
 
-        // Normalization
-        let outCode = code;
-        if (normAlif) {
-            if (
-                code === CHAR_ALIF_MADDA ||
-                code === CHAR_ALIF_HAMZA_ABOVE ||
-                code === CHAR_ALIF_HAMZA_BELOW ||
-                code === CHAR_ALIF_WASLA
-            ) {
-                outCode = CHAR_ALIF;
-            }
-        }
-        if (maqToYa && code === CHAR_ALIF_MAQSURAH) {
-            outCode = CHAR_YA;
-        }
-        if (taToHa && code === CHAR_TA_MARBUTAH) {
-            outCode = CHAR_HA;
-        }
-
-        buffer[bufIdx++] = outCode;
-        lastWasSpace = false;
+        // Default: emit the (possibly normalized) character
+        ctx.buffer[ctx.bufIdx++] = normalizeCode(code, normAlif, maqToYa, taToHa);
+        ctx.lastWasSpace = false;
     }
 
-    // Trailing trim
-    if (doTrim && lastWasSpace && bufIdx > 0) {
-        bufIdx--;
+    // Trailing-trim: drop the last space if it was the final emitted character
+    if (doTrim && ctx.lastWasSpace && ctx.bufIdx > 0) {
+        ctx.bufIdx--;
     }
 
-    if (bufIdx === 0) {
+    if (ctx.bufIdx === 0) {
         return '';
     }
-    const resultView = buffer.subarray(0, bufIdx);
-    return decoder.decode(resultView);
+    return decoder.decode(ctx.buffer.subarray(0, ctx.bufIdx));
 };
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 /**
  * Resolves options from a preset or custom options object.
@@ -830,3 +921,76 @@ export function sanitizeArabic(
 
     return applySanitization(input, resolved);
 }
+
+const sanitizeQuranBase = createArabicSanitizer({
+    base: 'none',
+    collapseWhitespace: true,
+    lettersAndSpacesOnly: true,
+    nfc: true,
+    replaceAlifMaqsurah: false,
+    replaceTaMarbutahWithHa: false,
+    stripDiacritics: true,
+    stripFootnotes: true,
+    stripTatweel: 'all',
+    stripZeroWidth: true,
+    trim: true,
+});
+
+const normalizeQuranOrthography = (input: string) => {
+    if (!input) {
+        return '';
+    }
+
+    let output = '';
+    let lastBaseCode = 0;
+
+    for (let index = 0; index < input.length; index += 1) {
+        const code = input.charCodeAt(index);
+
+        if (code === CHAR_ALIF_WASLA) {
+            output += String.fromCharCode(CHAR_ALIF);
+            lastBaseCode = CHAR_ALIF;
+            continue;
+        }
+
+        if (code === CHAR_DAGGER_ALIF) {
+            if (
+                lastBaseCode !== 0 &&
+                lastBaseCode !== 0x0630 && // ذ
+                lastBaseCode !== CHAR_HA &&
+                lastBaseCode !== CHAR_ALIF &&
+                lastBaseCode !== CHAR_WAW &&
+                lastBaseCode !== CHAR_YA &&
+                lastBaseCode !== CHAR_ALIF_MAQSURAH
+            ) {
+                output += String.fromCharCode(CHAR_ALIF);
+                lastBaseCode = CHAR_ALIF;
+            }
+            continue;
+        }
+
+        output += input[index];
+        if (!isDiacritic(code) && !isZeroWidth(code)) {
+            lastBaseCode = code;
+        }
+    }
+
+    return output;
+};
+
+/**
+ * Produces a conservative Qur'an-specific search surface.
+ *
+ * This helper is intentionally narrower than the generic `search` preset:
+ * it preserves standard hamza forms and alif maqsurah while normalizing
+ * Qur'anic orthography that would otherwise damage lexical identity in FTS.
+ *
+ * Current behavior:
+ * - maps alif wasla (`ٱ`) to bare alif (`ا`)
+ * - expands dagger alif (`ٰ`) only in contexts where the imla'i form needs an alif
+ * - strips tashkeel, tatweel, footnotes, zero-width chars, and non-letter noise
+ * - keeps only Arabic letters and spaces
+ */
+export const sanitizeQuranForSearch = (input: string) => {
+    return sanitizeQuranBase(normalizeQuranOrthography(input)).replace(/آ/gu, 'ا').replace(/ىء/gu, 'يء');
+};

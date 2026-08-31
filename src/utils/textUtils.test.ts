@@ -13,6 +13,24 @@ import {
 } from './textUtils';
 
 describe('textUtils', () => {
+    describe('tokenizeText', () => {
+        it('treats preservation symbols as literals instead of regular expressions', () => {
+            expect(tokenizeText('a*b+c?d[e\\f', ['*', '+', '?', '[', '\\'])).toEqual([
+                'a',
+                '*',
+                'b',
+                '+',
+                'c',
+                '?',
+                'd',
+                '[',
+                'e',
+                '\\',
+                'f',
+            ]);
+        });
+    });
+
     describe('removeFootnoteReferencesSimple', () => {
         it('should remove simple footnote with single Arabic numeral', () => {
             const input = 'هذا النص (¬٣) يحتوي على حاشية';
@@ -379,6 +397,13 @@ describe('textUtils', () => {
     });
 
     describe('standardizeHijriSymbol', () => {
+        it('is byte-idempotent after standardization', () => {
+            for (const input of ['سنة ١٤٤٥ ه', 'سنة ١٤٤٥ هـ', 'عام 1445 ه', 'عام 1445 هـ']) {
+                const standardized = standardizeHijriSymbol(input);
+                expect(standardizeHijriSymbol(standardized)).toBe(standardized);
+            }
+        });
+
         it('should replace standalone ه with هـ after Arabic digits', () => {
             expect(standardizeHijriSymbol('١٢٣ه')).toBe('١٢٣ هـ');
             expect(standardizeHijriSymbol('123ه')).toBe('123 هـ');

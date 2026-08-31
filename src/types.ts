@@ -23,7 +23,9 @@ export type FixTypoOptions = {
 
     /**
      * Array of special symbols that should be preserved during typo correction.
-     * These symbols (like honorifics or religious markers) take precedence in token selection.
+     * These symbols are tokenized separately, but are never imported from the
+     * alternate text when their occurrence counts differ between inputs. In
+     * that case alignment abstains and returns the original text unchanged.
      * @example ['ﷺ', '﷽', 'ﷻ'] // Common Arabic religious symbols
      */
     readonly typoSymbols: string[];

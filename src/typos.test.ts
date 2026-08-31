@@ -10,14 +10,14 @@ describe('typos', () => {
             typoSymbols: ['ﷺ'],
         };
 
-        it('should fix typos when typo symbols are present', () => {
+        it('should abstain instead of importing a one-sided preserved symbol', () => {
             const result = processTextAlignment(
                 'محمد صلى الله عليه وسلم رسول الله',
                 'محمد ﷺ رسول الله',
                 defaultOptions,
             );
 
-            expect(result).toEqual('محمد صلى الله عليه ﷺ رسول الله');
+            expect(result).toEqual('محمد صلى الله عليه وسلم رسول الله');
         });
 
         it('should be a no-op', () => {
@@ -25,7 +25,7 @@ describe('typos', () => {
             expect(result).toEqual('normal text');
         });
 
-        it('should work with different typo symbols', () => {
+        it('should not import multiple one-sided preserved symbols', () => {
             const options = {
                 highSimilarityThreshold: 0.9,
                 similarityThreshold: 0.7,
@@ -34,7 +34,7 @@ describe('typos', () => {
 
             const result = processTextAlignment('بسم الله الرحمن الرحيم الله جل جلاله', 'بسم ﷽ الله ﷻ', options);
 
-            expect(result).toEqual('بسم الله الرحمن ﷽ الله جل ﷻ');
+            expect(result).toEqual('بسم الله الرحمن الرحيم الله جل جلاله');
         });
 
         it('should handle similarity threshold edge cases', () => {
@@ -46,22 +46,34 @@ describe('typos', () => {
 
             const result = processTextAlignment('totally other words', 'completely different ﷺ text', options);
 
-            expect(result).toEqual('totally other ﷺ text');
+            expect(result).toEqual('totally other words');
         });
 
         it('should preserve diacritics when appropriate', () => {
             const result = processTextAlignment('النص صلى الله عليه وسلم العربي', 'النَّص ﷺ العَرَبي', defaultOptions);
-            expect(result).toEqual('النص صلى الله عليه ﷺ العربي');
+            expect(result).toEqual('النص صلى الله عليه وسلم العربي');
+        });
+
+        it('preserves a symbol that exists only in the original source', () => {
+            const result = processTextAlignment('محمد ﷺ رسول الله', 'محمد رسول الله', defaultOptions);
+
+            expect(result).toEqual('محمد ﷺ رسول الله');
+        });
+
+        it('allows alignment when both sources contain the same preserved symbol', () => {
+            const result = processTextAlignment('محمد ﷺ رسول الله', 'محمد ﷺ رسـول الله', defaultOptions);
+
+            expect(result).toContain('ﷺ');
         });
     });
 
     describe('fixTypo', () => {
-        it('should fall back to defaults and correct text', () => {
+        it('should fall back to safe defaults and keep one-sided symbols out', () => {
             const result = fixTypo('محمد صلي الله عليه وسلم', 'محمد ﷺ رسول الله', {
                 typoSymbols: ['ﷺ'],
             });
 
-            expect(result).toEqual('محمد ﷺ رسول الله عليه وسلم');
+            expect(result).toEqual('محمد صلي الله عليه وسلم');
         });
 
         it('should honor custom thresholds', () => {

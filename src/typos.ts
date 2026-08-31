@@ -25,7 +25,7 @@ const selectBestTokens = (
 ): string[] => {
     // Handle missing tokens
     if (originalToken === null) {
-        return [altToken!];
+        return altToken !== null && typoSymbols.includes(altToken) ? [] : [altToken!];
     }
     if (altToken === null) {
         return [originalToken];
@@ -48,10 +48,12 @@ const selectBestTokens = (
         return footnoteResult;
     }
 
-    // Handle typo symbols - prefer the symbol itself
+    // Preserved symbols are never imported from the alternate text. They are
+    // tokenized separately so a caller can retain a source symbol without a
+    // fuzzy match turning it into another token, but the original OCR remains
+    // authoritative when only one aligned side is a preserved symbol.
     if (typoSymbols.includes(originalToken) || typoSymbols.includes(altToken)) {
-        const typoSymbol = typoSymbols.find((symbol) => symbol === originalToken || symbol === altToken);
-        return typoSymbol ? [typoSymbol] : [originalToken];
+        return [originalToken];
     }
 
     // Choose based on similarity
@@ -119,6 +121,15 @@ const removeDuplicateTokens = (tokens: string[], highSimilarityThreshold: number
 export const processTextAlignment = (originalText: string, altText: string, options: FixTypoOptions): string => {
     const originalTokens = tokenizeText(originalText, options.typoSymbols);
     const altTokens = tokenizeText(altText, options.typoSymbols);
+
+    const hasMismatchedPreservedSymbolCounts = options.typoSymbols.some((symbol) => {
+        const originalCount = originalTokens.filter((token) => token === symbol).length;
+        const altCount = altTokens.filter((token) => token === symbol).length;
+        return originalCount !== altCount;
+    });
+    if (hasMismatchedPreservedSymbolCounts) {
+        return originalText;
+    }
 
     // Align token sequences
     const alignedPairs = alignTokenSequences(

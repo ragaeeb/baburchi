@@ -72,7 +72,8 @@ export const tokenizeText = (text: string, preserveSymbols: string[] = []): stri
 
     // Add spaces around each preserve symbol to ensure they're tokenized separately
     for (const symbol of preserveSymbols) {
-        const symbolRegex = new RegExp(symbol, 'g');
+        const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const symbolRegex = new RegExp(escapedSymbol, 'g');
         processedText = processedText.replace(symbolRegex, ` ${symbol} `);
     }
 
@@ -225,7 +226,7 @@ export const standardizeHijriSymbol = (text: string) => {
     // Replace standalone ه with هـ when it appears after Arabic digits (0-9 or ٠-٩)
     // Allow any amount of whitespace between the digit and ه, and consider Arabic punctuation as a boundary.
     // Boundary rule: only Arabic letters/digits should block replacement; punctuation should not.
-    return text.replace(/([0-9\u0660-\u0669])\s*ه(?=\s|$|[^\u0621-\u063A\u0641-\u064A\u0660-\u0669])/gu, '$1 هـ');
+    return text.replace(/([0-9\u0660-\u0669])\s*ه(?!ـ)(?=\s|$|[^\u0621-\u063A\u0641-\u064A\u0660-\u0669])/gu, '$1 هـ');
 };
 
 /**

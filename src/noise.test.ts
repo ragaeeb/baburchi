@@ -98,6 +98,12 @@ describe('noise', () => {
         });
 
         describe('Arabic text handling', () => {
+            it('preserves isolated Arabic honorific signs and ligatures', () => {
+                for (const honorific of ['ؐ', 'ؑ', 'ؒ', 'ؓ', '﵀', 'ﷺ', 'ﷻ', '\u{10ED1}']) {
+                    expect(isArabicTextNoise(honorific)).toBeFalse();
+                }
+            });
+
             it('should accept valid Arabic text', () => {
                 expect(isArabicTextNoise('السلام عليكم')).toBeFalse();
                 expect(isArabicTextNoise('محمد')).toBeFalse();

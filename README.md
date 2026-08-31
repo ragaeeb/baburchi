@@ -57,7 +57,7 @@ const correctedText = 'محمد ﷺ رسول الله';
 const typoSymbols = ['ﷺ', '﷽', 'ﷻ'];
 
 const result = fixTypo(originalText, correctedText, { typoSymbols });
-console.log(result); // 'محمد ﷺ رسول الله عليه وسلم'
+console.log(result); // Original text is retained because ﷺ occurs on only one side
 
 // Noise detection for OCR cleanup
 const cleanText = isArabicTextNoise('السلام عليكم'); // false
@@ -80,7 +80,7 @@ The main function for correcting typos using text alignment.
 
 **Options:**
 
-- `typoSymbols` (string[], required): Array of special symbols to preserve
+- `typoSymbols` (string[], required): Array of special symbols to tokenize and preserve. If a symbol's occurrence count differs between inputs, alignment abstains and returns `original` unchanged.
 - `similarityThreshold` (number, optional): Threshold for token alignment (default: 0.6)
 - `highSimilarityThreshold` (number, optional): Threshold for duplicate detection (default: 0.8)
 
@@ -308,7 +308,7 @@ const typoSymbols = ['ﷺ', '﷽', 'ﷻ'];
 const corrected = fixTypo(original, reference, { typoSymbols });
 ```
 
-### Handling Religious Symbols
+### Safely handling religious symbols
 
 ```typescript
 import { fixTypo } from 'baburchi';
@@ -322,8 +322,10 @@ const result = fixTypo(ocrText, referenceText, {
     similarityThreshold: 0.7,
 });
 
-console.log(result); // 'محمد صلى الله عليه ﷺ خير الأنام'
+console.log(result); // 'محمد صلى الله عليه وسلم خير الأنام'
 ```
+
+`typoSymbols` never authorizes importing a one-sided symbol from the alternate text. The caller must establish localized visual or authoritative source evidence separately. When the symbol counts differ, `fixTypo` abstains by returning the original text unchanged.
 
 ### Custom Similarity Thresholds
 

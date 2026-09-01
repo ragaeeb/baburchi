@@ -327,6 +327,25 @@ console.log(result); // 'محمد صلى الله عليه وسلم خير ال�
 
 `typoSymbols` never authorizes importing a one-sided symbol from the alternate text. The caller must establish localized visual or authoritative source evidence separately. When the symbol counts differ, `fixTypo` abstains by returning the original text unchanged.
 
+### Discovering corrupted honorifics
+
+```typescript
+import { findHonorificCorruptions } from 'baburchi';
+
+const candidates = findHonorificCorruptions(
+    'حذر القرآن وحذر رسول اللّٰه ولي يي من أهل الأهواء.',
+    'حذر القرآن وحذر رسول الله ﷺ من أهل الأهواء.',
+);
+
+// [{ honorific: 'ﷺ', primaryText: 'ولي يي', primaryStart: 28, ... }]
+```
+
+The reference OCR must contain the honorific. A candidate is returned only when
+the surrounding words identify one unambiguous location in the primary OCR.
+Scholar and companion signs such as `﵀`/`ؒ` and `﵁`/`ؓ` are supported, along
+with their written forms (`رحمه الله`, `رضي الله عنه`, and related variants).
+This API reports evidence and offsets; it never inserts or replaces text.
+
 ### Custom Similarity Thresholds
 
 ```typescript

@@ -168,20 +168,38 @@ const needsCorrection = (lines: TextLine[], references: ReturnType<typeof extrac
         return true;
     }
 
-    const bodySet = new Set(references.bodyReferences);
-    const footnoteSet = new Set(references.footnoteReferences);
-    if (bodySet.size !== footnoteSet.size) {
-        return true;
-    }
-
-    // Check if the sets contain the same elements
-    for (const ref of bodySet) {
-        if (!footnoteSet.has(ref)) {
+    const bodyCounts = countReferences(references.bodyReferences);
+    const footnoteCounts = countReferences(references.footnoteReferences);
+    for (const ref of new Set([...bodyCounts.keys(), ...footnoteCounts.keys()])) {
+        if ((bodyCounts.get(ref) ?? 0) !== (footnoteCounts.get(ref) ?? 0)) {
             return true;
         }
     }
 
     return false;
+};
+
+const countReferences = (references: string[]): Map<string, number> => {
+    const counts = new Map<string, number>();
+    for (const reference of references) {
+        counts.set(reference, (counts.get(reference) ?? 0) + 1);
+    }
+    return counts;
+};
+
+const surplusReferences = (ordered: string[], source: string[], target: string[]): string[] => {
+    const sourceCounts = countReferences(source);
+    const targetCounts = countReferences(target);
+    const surplus: string[] = [];
+
+    for (const reference of new Set(ordered)) {
+        const count = (sourceCounts.get(reference) ?? 0) - (targetCounts.get(reference) ?? 0);
+        for (let index = 0; index < count; index++) {
+            surplus.push(reference);
+        }
+    }
+
+    return surplus;
 };
 
 /**
@@ -231,9 +249,17 @@ export const correctReferences = <T extends TextLine>(lines: T[]): T[] => {
     const uniqueFootnoteRefs = [...new Set(cleanReferences.footnoteReferences)];
 
     // Queue 1: Body references available for footnotes.
-    const bodyRefsForFootnotes = uniqueBodyRefs.filter((ref) => !footnoteRefSet.has(ref));
+    const bodyRefsForFootnotes = surplusReferences(
+        uniqueBodyRefs,
+        cleanReferences.bodyReferences,
+        cleanReferences.footnoteReferences,
+    );
     // Queue 2: Footnote references available for the body.
-    const footnoteRefsForBody = uniqueFootnoteRefs.filter((ref) => !bodyRefSet.has(ref));
+    const footnoteRefsForBody = surplusReferences(
+        uniqueFootnoteRefs,
+        cleanReferences.footnoteReferences,
+        cleanReferences.bodyReferences,
+    );
 
     // Step 4: Determine the starting point for any completely new reference numbers.
     const allRefs = [...bodyRefSet, ...footnoteRefSet];

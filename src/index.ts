@@ -2,6 +2,7 @@ export * from './alignment';
 export * from './balance';
 export * from './footnotes';
 export * from './fuzzy';
+export * from './honorifics';
 export * from './noise';
 export * from './typos';
 export * from './utils/levenshthein';

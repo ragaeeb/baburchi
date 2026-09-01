@@ -1,7 +1,5 @@
+import { containsArabicHonorific } from './honorifics';
 import { PATTERNS } from './utils/textUtils';
-
-const ARABIC_HONORIFIC_PATTERN =
-    /[\u0610-\u0614\uFBC3-\uFBD2\uFD40-\uFD4F\uFDC8-\uFDCF\uFDFA-\uFDFB\uFDFD-\uFDFF\u{10ED1}-\u{10ED8}]/u;
 
 /**
  * Character statistics for analyzing text content and patterns
@@ -52,7 +50,7 @@ export const isArabicTextNoise = (text: string): boolean => {
     // Honorific signs can be a single combining mark, BMP ligature, or one
     // supplementary-plane scalar. They must survive generic noise scoring so
     // page-aware callers can classify and protect them using visual evidence.
-    if (ARABIC_HONORIFIC_PATTERN.test(trimmed)) {
+    if (containsArabicHonorific(trimmed)) {
         return false;
     }
 

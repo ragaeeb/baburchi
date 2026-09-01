@@ -1,4 +1,4 @@
-import { calculateLevenshteinDistance } from './levenshthein';
+import { boundedLevenshtein, calculateLevenshteinDistance } from './levenshthein';
 import { sanitizeArabic } from './sanitize';
 
 // Alignment scoring constants
@@ -27,6 +27,42 @@ export const calculateSimilarity = (textA: string, textB: string): number => {
     return (maxLength - distance) / maxLength;
 };
 
+const EPSILON = 1e-9;
+
+const maxDistanceForThreshold = (length: number, threshold: number, inclusive: boolean): number => {
+    if (threshold >= 1) {
+        return inclusive && threshold === 1 ? 0 : -1;
+    }
+
+    const allowed = (1 - threshold) * length;
+    return inclusive ? Math.floor(allowed + EPSILON) : Math.ceil(allowed - EPSILON) - 1;
+};
+
+/**
+ * Checks a normalized Levenshtein similarity threshold without calculating the
+ * full edit matrix when the strings are already too different.
+ *
+ * @param textA - First string to compare.
+ * @param textB - Second string to compare.
+ * @param threshold - Similarity threshold from 0.0 to 1.0.
+ * @param inclusive - Whether equality with the threshold is accepted.
+ * @returns True when the normalized similarity passes the requested threshold.
+ */
+export const isSimilarityAboveThreshold = (
+    textA: string,
+    textB: string,
+    threshold: number,
+    inclusive: boolean = false,
+): boolean => {
+    const maxLength = Math.max(textA.length, textB.length);
+    if (maxLength === 0) {
+        return inclusive ? threshold <= 1 : threshold < 1;
+    }
+
+    const maxDistance = maxDistanceForThreshold(maxLength, threshold, inclusive);
+    return maxDistance >= 0 && boundedLevenshtein(textA, textB, maxDistance) <= maxDistance;
+};
+
 /**
  * Checks if two texts are similar after Arabic normalization.
  * Normalizes both texts by removing diacritics and decorative elements,
@@ -42,7 +78,7 @@ export const calculateSimilarity = (textA: string, textB: string): number => {
 export const areSimilarAfterNormalization = (textA: string, textB: string, threshold: number = 0.6): boolean => {
     const normalizedA = sanitizeArabic(textA);
     const normalizedB = sanitizeArabic(textB);
-    return calculateSimilarity(normalizedA, normalizedB) >= threshold;
+    return isSimilarityAboveThreshold(normalizedA, normalizedB, threshold, true);
 };
 
 /**
@@ -73,7 +109,7 @@ export const calculateAlignmentScore = (
     }
 
     const isTypoSymbol = typoSymbols.includes(tokenA) || typoSymbols.includes(tokenB);
-    const isHighlySimilar = calculateSimilarity(normalizedA, normalizedB) >= similarityThreshold;
+    const isHighlySimilar = isSimilarityAboveThreshold(normalizedA, normalizedB, similarityThreshold, true);
 
     return isTypoSymbol || isHighlySimilar ? ALIGNMENT_SCORES.SOFT_MATCH : ALIGNMENT_SCORES.MISMATCH_PENALTY;
 };
@@ -211,7 +247,7 @@ export const alignTokenSequences = (
                 alignmentScore = ALIGNMENT_SCORES.PERFECT_MATCH;
             } else {
                 const isTypo = typoSymbolsSet.has(tokensA[i - 1]) || typoSymbolsSet.has(tokensB[j - 1]);
-                const highSim = calculateSimilarity(aNorm, bNorm) >= similarityThreshold;
+                const highSim = isSimilarityAboveThreshold(aNorm, bNorm, similarityThreshold, true);
                 alignmentScore = isTypo || highSim ? ALIGNMENT_SCORES.SOFT_MATCH : ALIGNMENT_SCORES.MISMATCH_PENALTY;
             }
 

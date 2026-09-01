@@ -5,6 +5,7 @@ import {
     areSimilarAfterNormalization,
     calculateAlignmentScore,
     calculateSimilarity,
+    isSimilarityAboveThreshold,
 } from './similarity';
 
 describe('similarity', () => {
@@ -37,6 +38,32 @@ describe('similarity', () => {
         it('should work with Arabic text', () => {
             const similarity = calculateSimilarity('السلام', 'السلم');
             expect(similarity).toBeGreaterThan(0.8);
+        });
+    });
+
+    describe('isSimilarityAboveThreshold', () => {
+        it('supports strict and inclusive threshold comparisons', () => {
+            expect(isSimilarityAboveThreshold('hello', 'helo', 0.7)).toBeTrue();
+            expect(isSimilarityAboveThreshold('hello', 'helo', 0.8)).toBeFalse();
+            expect(isSimilarityAboveThreshold('hello', 'helo', 0.8, true)).toBeTrue();
+        });
+
+        it('matches the full similarity calculation at threshold boundaries', () => {
+            const pairs = [
+                ['', ''],
+                ['abc', 'abc'],
+                ['abc', 'axc'],
+                ['kitten', 'sitting'],
+                ['السلام', 'السلم'],
+            ];
+
+            for (const [left, right] of pairs) {
+                const similarity = calculateSimilarity(left, right);
+                for (const threshold of [0, 0.5, 0.6, 0.8, 1]) {
+                    expect(isSimilarityAboveThreshold(left, right, threshold)).toBe(similarity > threshold);
+                    expect(isSimilarityAboveThreshold(left, right, threshold, true)).toBe(similarity >= threshold);
+                }
+            }
         });
     });
 

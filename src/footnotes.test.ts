@@ -328,5 +328,35 @@ describe('footnotes', () => {
                 },
             ]);
         });
+
+        it('reuses surplus body references for multiple missing footnote markers', () => {
+            const lines = [
+                { text: 'Body (١) again (١) and (٢)' },
+                { isFootnote: true, text: '(١) First footnote' },
+                { isFootnote: true, text: '() Missing match A' },
+                { isFootnote: true, text: '() Missing match B' },
+            ];
+
+            expect(correctReferences(lines)).toEqual([
+                { text: 'Body (١) again (١) and (٢)' },
+                { isFootnote: true, text: '(١) First footnote' },
+                { isFootnote: true, text: '(١) Missing match A' },
+                { isFootnote: true, text: '(٢) Missing match B' },
+            ]);
+        });
+
+        it('uses a surplus footnote reference for a missing body marker', () => {
+            const lines = [
+                { text: 'Body with () placeholder' },
+                { isFootnote: true, text: '(١) First footnote' },
+                { isFootnote: true, text: '(٢) Extra footnote' },
+            ];
+
+            expect(correctReferences(lines)).toEqual([
+                { text: 'Body with (١) placeholder' },
+                { isFootnote: true, text: '(١) First footnote' },
+                { isFootnote: true, text: '(٢) Extra footnote' },
+            ]);
+        });
     });
 });

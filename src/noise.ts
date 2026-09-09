@@ -1,3 +1,4 @@
+import { containsArabicHonorific } from './honorifics';
 import { PATTERNS } from './utils/textUtils';
 
 /**
@@ -45,6 +46,13 @@ export const isArabicTextNoise = (text: string): boolean => {
 
     const trimmed = text.trim();
     const length = trimmed.length;
+
+    // Honorific signs can be a single combining mark, BMP ligature, or one
+    // supplementary-plane scalar. They must survive generic noise scoring so
+    // page-aware callers can classify and protect them using visual evidence.
+    if (containsArabicHonorific(trimmed)) {
+        return false;
+    }
 
     // Very short strings are likely noise unless they're meaningful Arabic
     if (length < 2) {

@@ -35,7 +35,7 @@ const maxDistanceForThreshold = (length: number, threshold: number, inclusive: b
     }
 
     const allowed = (1 - threshold) * length;
-    return inclusive ? Math.floor(allowed + EPSILON) : Math.ceil(allowed - EPSILON) - 1;
+    return inclusive ? Math.floor(allowed + EPSILON) : Math.max(0, Math.ceil(allowed - EPSILON) - 1);
 };
 
 /**

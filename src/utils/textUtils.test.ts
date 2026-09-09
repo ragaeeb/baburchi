@@ -303,6 +303,10 @@ describe('textUtils', () => {
             const expected = ['ﷺ', 'start', 'and', 'end', 'ﷺ'];
             expect(tokenizeText(input, ['ﷺ'])).toEqual(expected);
         });
+
+        it('preserves regex metacharacters as literal multi-character symbols', () => {
+            expect(tokenizeText('a$$b', ['$$'])).toEqual(['a', '$$', 'b']);
+        });
     });
 
     describe('handleFootnoteFusion', () => {
@@ -397,6 +401,18 @@ describe('textUtils', () => {
     });
 
     describe('standardizeHijriSymbol', () => {
+        it('produces the expected first-pass standardization and remains byte-idempotent', () => {
+            for (const [input, expected] of [
+                ['سنة ١٤٤٥ ه', 'سنة ١٤٤٥ هـ'],
+                ['سنة ١٤٤٥ هـ', 'سنة ١٤٤٥ هـ'],
+                ['عام 1445 ه', 'عام 1445 هـ'],
+                ['عام 1445 هـ', 'عام 1445 هـ'],
+            ]) {
+                expect(standardizeHijriSymbol(input)).toBe(expected);
+                expect(standardizeHijriSymbol(expected)).toBe(expected);
+            }
+        });
+
         it('is byte-idempotent after standardization', () => {
             for (const input of ['سنة ١٤٤٥ ه', 'سنة ١٤٤٥ هـ', 'عام 1445 ه', 'عام 1445 هـ']) {
                 const standardized = standardizeHijriSymbol(input);

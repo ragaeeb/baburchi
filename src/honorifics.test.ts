@@ -61,4 +61,17 @@ describe('findHonorificCorruptions', () => {
     it('does not report a glyph already present in both OCR streams', () => {
         expect(findHonorificCorruptions('قال محمد ﷺ في الخبر', 'قال محمد ﷺ في الخبر')).toEqual([]);
     });
+
+    it('allows four gap words but rejects a fifth', () => {
+        expect(findHonorificCorruptions('قال زيد واحد اثنان ثلاثة أربعة ثم مضى', 'قال زيد ﷺ ثم مضى')).toEqual([
+            expect.objectContaining({ honorific: 'ﷺ', primaryText: 'واحد اثنان ثلاثة أربعة' }),
+        ]);
+        expect(findHonorificCorruptions('قال زيد واحد اثنان ثلاثة أربعة خمسة ثم مضى', 'قال زيد ﷺ ثم مضى')).toEqual([]);
+    });
+
+    it('finds a unique leading corruption without preceding context', () => {
+        expect(findHonorificCorruptions('ولي قال زيد', 'ﷺ قال زيد')).toEqual([
+            expect.objectContaining({ honorific: 'ﷺ', primaryEnd: 3, primaryStart: 0, primaryText: 'ولي' }),
+        ]);
+    });
 });

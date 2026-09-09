@@ -98,7 +98,7 @@ const findAfterIndex = (words: WordSpan[], start: number, expected: WordSpan[]):
         return start;
     }
 
-    const limit = Math.min(words.length, start + MAX_GAP_WORDS + 1);
+    const limit = Math.min(words.length, start + MAX_GAP_WORDS);
     for (let index = start; index <= limit; index++) {
         if (contextMatchesAt(words, index, expected)) {
             return index;
@@ -115,7 +115,8 @@ const locateGap = (
 ): null | [number, number] => {
     const matches: Array<[number, number]> = [];
 
-    for (let index = 0; index <= primaryWords.length - before.length; index++) {
+    const lastIndex = before.length === 0 ? 0 : primaryWords.length - before.length;
+    for (let index = 0; index <= lastIndex; index++) {
         if (before.length > 0 && !matchesAt(primaryWords, index, before)) {
             continue;
         }

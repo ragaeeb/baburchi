@@ -65,6 +65,13 @@ describe('similarity', () => {
                 }
             }
         });
+
+        it('accepts an identical one-character string just below a strict threshold of one', () => {
+            expect(isSimilarityAboveThreshold('a', 'a', 1 - 5e-10)).toBeTrue();
+            expect(isSimilarityAboveThreshold('a', 'a', 1 - 5e-10, true)).toBeTrue();
+            expect(isSimilarityAboveThreshold('a', 'a', 1)).toBeFalse();
+            expect(isSimilarityAboveThreshold('a', 'a', 1, true)).toBeTrue();
+        });
     });
 
     describe('areSimilarAfterNormalization', () => {

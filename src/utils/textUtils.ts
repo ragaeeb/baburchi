@@ -74,7 +74,7 @@ export const tokenizeText = (text: string, preserveSymbols: string[] = []): stri
     for (const symbol of preserveSymbols) {
         const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const symbolRegex = new RegExp(escapedSymbol, 'g');
-        processedText = processedText.replace(symbolRegex, ` ${symbol} `);
+        processedText = processedText.replace(symbolRegex, () => ` ${symbol} `);
     }
 
     return processedText.trim().split(PATTERNS.whitespace).filter(Boolean);

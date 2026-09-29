@@ -1,9 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from 'bun:test';
 
-import { correctReferences } from './footnotes';
+import { correctReferences, hasInvalidFootnotes } from './footnotes';
 
 describe('footnotes', () => {
+    it('detects invalid markers consistently across repeated and interleaved calls', () => {
+        for (const text of ['()', '(O)', '(1)', '(V)', '(.)']) {
+            expect(hasInvalidFootnotes(text)).toBe(true);
+            expect(hasInvalidFootnotes(text)).toBe(true);
+            expect(hasInvalidFootnotes('Valid (٢)')).toBe(false);
+            expect(hasInvalidFootnotes(text)).toBe(true);
+        }
+    });
+
     describe('correctReferences', () => {
         it('should correct the invalid footnote', () => {
             const lines = [{ text: 'Some (١) Text' }, { isFootnote: true, text: '() Footnote' }];

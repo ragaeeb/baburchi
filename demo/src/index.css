@@ -1,34 +1,69 @@
 :root {
-    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Segoe UI", system-ui, sans-serif;
     line-height: 1.5;
     font-weight: 400;
-    color: #0f172a;
-    background-color: #f8fafc;
+    color: #20332e;
+    background: #f4f3ed;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    --muted: #64716b;
+    --line: #dedfd5;
+    --accent: #23624d;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
-
 * {
     box-sizing: border-box;
 }
-
 body {
     margin: 0;
-    min-height: 100vh;
-    background: #f8fafc;
+    min-width: 320px;
 }
-
+button,
+input,
+select,
+textarea {
+    font: inherit;
+}
+button,
+a,
+input,
+select,
+textarea {
+    -webkit-tap-highlight-color: transparent;
+}
+button {
+    cursor: pointer;
+}
 a {
     color: inherit;
-    text-decoration: none;
 }
-
-button {
-    font-family: inherit;
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid #b47c23;
+    outline-offset: 3px;
 }
-
-#root {
-    min-height: 100vh;
+button,
+textarea,
+input,
+select {
+    border-radius: 6px;
+}
+h1,
+h2,
+h3,
+h4,
+p {
+    margin: 0;
+}
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
 }

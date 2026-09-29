@@ -1,6 +1,5 @@
 {
     "dependencies": {
-        "baburchi": "1.9.0",
         "solid-js": "1.9.15"
     },
     "devDependencies": {
@@ -12,9 +11,9 @@
     "name": "demo",
     "private": true,
     "scripts": {
-        "build": "tsc -b && vite build",
+        "build": "bun run --cwd .. build && tsc -b && vite build",
         "deploy": "bun run build && surge dist baburchi.surge.sh",
-        "dev": "vite",
+        "dev": "bun run --cwd .. build && vite",
         "lint": "biome check .",
         "preview": "vite preview"
     },

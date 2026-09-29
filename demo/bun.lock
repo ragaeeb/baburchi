@@ -5,7 +5,6 @@
     "": {
       "name": "demo",
       "dependencies": {
-        "baburchi": "1.9.0",
         "solid-js": "1.9.15",
       },
       "devDependencies": {
@@ -150,8 +149,6 @@
     "babel-plugin-jsx-dom-expressions": ["babel-plugin-jsx-dom-expressions@0.40.10", "", { "dependencies": { "@babel/helper-module-imports": "7.18.6", "@babel/plugin-syntax-jsx": "^7.18.6", "@babel/types": "^7.20.7", "html-entities": "2.3.3", "parse5": "^7.1.2" }, "peerDependencies": { "@babel/core": "^7.20.12" } }, "sha512-lxve6Y02YiZTldB7efKpnbf1BH00XCFZNYYW235jSGsYaJNFtHrYlKV6/O+miHbjqpIr9FTe5+0no4hofAMbfA=="],
 
     "babel-preset-solid": ["babel-preset-solid@1.9.15", "", { "dependencies": { "babel-plugin-jsx-dom-expressions": "^0.40.10" }, "peerDependencies": { "@babel/core": "^7.0.0", "solid-js": "^1.9.15" }, "optionalPeers": ["solid-js"] }, "sha512-GBmg1OiPb+OwcH51XbDAKPtvrPfQW7rCJTJxcp8+yhtWwN+kqnbEJk2SgVybd+uhTxTKAvjaFyiQSr/eUZBwzg=="],
-
-    "baburchi": ["baburchi@1.9.0", "", {}, "sha512-Jqx49vBd0L+8tU5qSFRJ0Q+4UwKEuWL6sc5cmXq6ftn+VKltLguVY+6fiu4/5zAR3gicmn6ymr79Pd0U/srP8A=="],
 
     "baseline-browser-mapping": ["baseline-browser-mapping@2.11.26", "", { "bin": { "baseline-browser-mapping": "dist/cli.cjs" } }, "sha512-GLQdD3y6UF8iVuMJl5fHgE4jdn/ua7n+toKfLgNlg3BqQtOZjpy68T8Tup8/wGWZCDlm7KMg7tPb4MPn7oN0TQ=="],
 

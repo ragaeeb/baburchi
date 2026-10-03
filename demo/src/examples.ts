@@ -62,7 +62,7 @@ type AlignmentCell = {
 const typoSymbols = ['ﷺ', '﷽', 'ﷻ'];
 
 const ensureSections = (input: string, count: number): string[] => {
-    const sections = input.split(/\n-{3,}\n/).map((section) => section.trim());
+    const sections = input.split('\n---\n').map((section) => section.trim());
     return [...sections, ...Array.from({ length: Math.max(0, count - sections.length) }, () => '')];
 };
 

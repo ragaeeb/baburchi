@@ -44,13 +44,14 @@ function App() {
     const labels = createMemo(() => inputLabels[selectedEntry().id] ?? ['Text']);
     const structuredOutput = createMemo(() => /^[[{]/.test(output() ?? ''));
 
-    const run = () => {
+    const run = (values: string[]) => {
         try {
+            const input = values.join('\n---\n');
             // Keep quadratic alignment examples responsive with user-supplied text.
-            if (inputValues().join('\n---\n').length > 2000) {
+            if (input.length > 2000) {
                 throw new Error('Please keep the combined input under 2,000 characters for this browser demo.');
             }
-            setOutput(selectedEntry().apply(inputValues().join('\n---\n')));
+            setOutput(selectedEntry().apply(input));
             setErrorMessage('');
         } catch (error) {
             setOutput(null);
@@ -59,9 +60,10 @@ function App() {
     };
 
     const loadExample = (alternate = false) => {
-        setInputValues((alternate ? selectedEntry().alternative : selectedEntry().placeholder).split('\n---\n'));
+        const values = (alternate ? selectedEntry().alternative : selectedEntry().placeholder).split('\n---\n');
+        setInputValues(values);
         setExample(alternate ? 'Compare behavior' : 'Typical case');
-        run();
+        run(values);
     };
 
     const selectEntry = (entry: DemoEntry) => {
@@ -78,7 +80,7 @@ function App() {
         setErrorMessage('');
     };
 
-    run();
+    run(inputValues());
 
     return (
         <div class="app-shell">
@@ -216,7 +218,7 @@ function App() {
                                 )}
                             </For>
                             <div class="input-actions">
-                                <button class="action-button" onClick={run} type="button">
+                                <button class="action-button" onClick={() => run(inputValues())} type="button">
                                     Run function <span aria-hidden="true">→</span>
                                 </button>
                                 <button class="text-button" onClick={() => loadExample()} type="button">

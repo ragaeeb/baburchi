@@ -20,6 +20,7 @@ test.each([
     ['removeFootnoteReferencesSimple', 'النص (¬١٢) مع (٢)', 'النص مع (٢)'],
     ['extractDigits', 'عام 1445 الصفحة 12', '1445'],
     ['boundedLevenshtein', 'a\n---\nabcdefghi', '4'],
+    ['calculateLevenshteinDistance', 'alpha\n----\nbeta\n---\nalpha\n----\nbeta', '0'],
 ])('%s formats values without obscuring their meaning', (id, input, expected) => {
     expect(entries.find((entry) => entry.id === id)!.apply(input)).toBe(expected);
 });

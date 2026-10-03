@@ -41,7 +41,7 @@
                 "noExcessiveCognitiveComplexity": "warn",
                 "useWhile": "error"
             },
-            "recommended": true,
+            "preset": "recommended",
             "style": {
                 "noNonNullAssertion": "off",
                 "useBlockStatements": {

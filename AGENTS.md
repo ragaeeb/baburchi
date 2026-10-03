@@ -4,6 +4,7 @@ Welcome to **baburchi**, a Bun-first TypeScript library that fixes OCR typos and
 
 ## Repository map
 
+- `demo/` – Solid + Vite function explorer; its dev/build scripts build the local library first. Restart the demo after library source changes.
 - `src/` – library source files. Core entry point is `src/index.ts`, which re-exports helpers from:
   - `src/alignment.ts` for paragraph alignment utilities.
   - `src/balance.ts` for bracket/quote balancing utilities.

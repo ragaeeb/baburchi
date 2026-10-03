@@ -1,20 +1,19 @@
 {
     "dependencies": {
-        "baburchi": "1.8.0",
-        "solid-js": "1.9.11"
+        "solid-js": "1.9.15"
     },
     "devDependencies": {
-        "@types/node": "25.5.0",
-        "typescript": "5.9.3",
-        "vite": "^8.0.0",
-        "vite-plugin-solid": "2.11.11"
+        "@types/node": "26.6.4",
+        "typescript": "7.0.2",
+        "vite": "^8.3.2",
+        "vite-plugin-solid": "2.11.14"
     },
     "name": "demo",
     "private": true,
     "scripts": {
-        "build": "tsc -b && vite build",
+        "build": "bun run --cwd .. build && tsc -b && vite build",
         "deploy": "bun run build && surge dist baburchi.surge.sh",
-        "dev": "vite",
+        "dev": "bun run --cwd .. build && vite",
         "lint": "biome check .",
         "preview": "vite preview"
     },

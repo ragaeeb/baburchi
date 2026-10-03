@@ -848,6 +848,7 @@ import { hasInvalidFootnotes } from 'baburchi';
 
 const invalid = hasInvalidFootnotes('Text with () reference'); // true
 const valid = hasInvalidFootnotes('Text with (١) reference'); // false
+// Repeated calls are independent; the same input always returns the same result.
 ```
 
 #### `correctReferences(lines)`

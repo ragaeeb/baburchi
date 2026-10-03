@@ -15,6 +15,7 @@ const INVALID_FOOTNOTE = '()';
  * hasInvalidFootnotes('OCR mistake (O)') // Returns true
  */
 export const hasInvalidFootnotes = (text: string): boolean => {
+    PATTERNS.invalidReferenceRegex.lastIndex = 0;
     return PATTERNS.invalidReferenceRegex.test(text);
 };
 

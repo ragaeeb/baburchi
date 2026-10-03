@@ -1,41 +1,47 @@
 # baburchi demo
 
-A minimal Solid + Vite experience for exploring every exported function in the **baburchi** OCR post-processing library.
-The interface provides a sidebar for each API, pre-filled examples, and a one-click "Format" action to see results.
+A compact Solid + Vite workbench for exploring the library’s 41 public functions.
+Search by function name or task, filter by category, and compare two curated examples per function.
 
-**Live demo:** <https://baburchi.surge.sh>
+**Live demo:** <https://baburchi.surge.sh> (reflects the last deployment).
 
-## What this demo showcases
+## Using the explorer
 
-- A complete function explorer covering all baburchi exports.
-- Arabic-aware examples with right-to-left input where appropriate.
-- Instant formatting output powered by the library APIs.
-
-## Requirements
-
-- [Bun](https://bun.sh/) 1.2+ (preferred package manager)
+- Each function explains its purpose, input format and how to interpret its result.
+- Multi-argument functions have separate labeled fields; you do not need to type separators.
+- Input and output stay separate. Editing clears the previous result; **Run function** computes the new one.
+- **Typical case**, **Compare behavior**, and **Reset example** load and run examples immediately.
+- Arabic inputs use right-to-left text; JSON results use left-to-right layout.
+- The result shows `null`, empty strings, page indices and mutated token arrays explicitly.
+- Inputs stay in the browser. The combined input is limited to 2,000 characters to keep alignment responsive.
 
 ## Local development
 
+Requires Bun ≥ 1.3.11. From the repository root:
+
 ```bash
+bun install
+cd demo
 bun install
 bun run dev
 ```
 
-Open http://localhost:5173 to view the app.
+Open <http://localhost:5173>. The demo imports `../dist/index.js`; its dev and build scripts
+build the checked-out library first rather than using a published package. Restart the demo
+when changing library source so the build is refreshed.
 
-## Build for production
+## Validation
+
+From the repository root:
 
 ```bash
 bun run build
-```
-
-## Linting
-
-```bash
+bun test
 bun run lint
+cd demo
+bun run build
 ```
 
 ## Deployment
 
-Learn more about deploying your application with the [documentations](https://vite.dev/guide/static-deploy.html)
+From `demo/`, run `bun run deploy` to build and publish with Surge.
